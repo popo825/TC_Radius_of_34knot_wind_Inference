@@ -20,6 +20,13 @@
       || !Array.isArray(meta.source_urls) || !meta.source_urls.length
       || !meta.source_urls.every(url=>typeof url==='string' && url.startsWith('https://'))
       || !/^[a-f0-9]{64}$/.test(result.model_sha256)) throw new Error('辨識來源或時間紀錄不完整。');
+    const e=meta.center_estimation;
+    if(e && (!['reported','interpolated_track','extrapolated_motion','extrapolated_history'].includes(e.method)
+      || !validTime(e.valid_at) || Math.abs(Date.parse(e.valid_at)-Date.parse(meta.observed_at))>1000
+      || !Number.isFinite(e.lat) || !Number.isFinite(e.lon) || Math.abs(e.lat-meta.center_lat)>1e-5 || Math.abs(e.lon-meta.center_lon)>1e-5
+      || !Number.isFinite(e.displacement_km) || e.displacement_km<0
+      || (e.speed_kmh!=null && (!Number.isFinite(e.speed_kmh) || !Number.isFinite(e.bearing_deg)))))
+      throw new Error('裁切中心與影像時刻不相符。');
   }
   function validateSnapshot(data) {
     if(!data || data.schema_version!==1 || data.mode!=='hourly' || !Array.isArray(data.storms)

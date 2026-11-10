@@ -86,11 +86,14 @@ def write_product(directory, sid, result, png):
     (directory / f'{sid}.png').write_bytes(png)
     write_json(directory / f'{sid}.json', result)
     metadata = result['metadata']
-    lines = ['bin_nmi,probability,mean_nmi,storm_id,image_time_utc,position_time_utc,satellite,channel,center_lat,center_lon,model_sha256']
+    estimate = metadata.get('center_estimation', {})
+    lines = ['bin_nmi,probability,mean_nmi,storm_id,image_time_utc,position_time_utc,satellite,channel,center_lat,center_lon,model_sha256,center_valid_at,center_method,position_source,motion_kmh,motion_bearing_deg']
     for radius, probability in zip(result['bins_nmi'], result['probabilities']):
         lines.append(','.join(str(v) for v in [radius, probability, result['mean_nmi'], sid,
             metadata['observed_at'], metadata['position_at'], metadata['satellite'], metadata['channel'],
-            metadata['center_lat'], metadata['center_lon'], result['model_sha256']]))
+            metadata['center_lat'], metadata['center_lon'], result['model_sha256'],
+            estimate.get('valid_at',''), estimate.get('method','reported_unadjusted'), estimate.get('reference_source',''),
+            estimate.get('speed_kmh',''), estimate.get('bearing_deg','')]))
     (directory / f'{sid}.csv').write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 

@@ -106,7 +106,8 @@ function selectStorm(id, focus=true) {
   $('domain-tag').textContent=storm.in_training_basin?'● 北大西洋 · 訓練海盆':'● 跨海盆實驗 · 尚未驗證準確度';
   $('domain-tag').classList.toggle('in-basin',storm.in_training_basin);
   $('selected-position').textContent=position(storm);$('selected-wind').textContent=`${storm.wind_kt??'—'} kt / ${storm.pressure_hpa??'—'} hPa`;
-  $('position-time').textContent='清單定位 '+dateText(storm.observed_at)+(storm.stale?' · 資料過期':'');
+  const intensityLabel=storm.intensity_at && storm.intensity_at!==storm.observed_at ? ' · 強度資料 '+dateText(storm.intensity_at) : '';
+  $('position-time').textContent='來源定位 '+dateText(storm.observed_at)+' · '+(storm.position_source||storm.source||'來源清單')+intensityLabel+(storm.stale?' · 資料過期':'');
   $('image-meta').textContent='讀取本批次 11.2 µm 觀測…';
   $('prediction-status').textContent='';
   $('channel-label').textContent='11.2 µm';$('infer').disabled=true;
@@ -125,10 +126,14 @@ function selectStorm(id, focus=true) {
     img.onerror=()=>{if(generation===state.generation)imageError('批次影像載入失敗，請重新讀取。');};
     img.src=record.image_url+'?v='+encodeURIComponent(state.snapshot.generation_id);
     const m=record.result.metadata;
+    const estimate=m.center_estimation;
+    const methodLabels={reported:'來源定位',interpolated_track:'兩筆定位內插',extrapolated_motion:'依通報移動向量外推',extrapolated_history:'依歷史速度外推'};
+    const centerLabel=estimate ? `${methodLabels[estimate.method]} · ${dateText(estimate.valid_at)}` : '未作時間補償（舊批次）';
+    const motionLabel=estimate?.speed_kmh!=null ? `<br>移動 ${estimate.speed_kmh.toFixed(1)} km/h · 朝 ${estimate.bearing_deg.toFixed(0)}° · 位移 ${estimate.displacement_km.toFixed(1)} km` : '';
     $('channel-label').textContent=m.channel+' · '+m.wavelength_um+' µm';
-    $('image-meta').innerHTML=`${esc(m.satellite)} · 影像 ${esc(dateText(m.observed_at))}<br>156 × 156 · 8 km/pixel · ${m.resampling==='nearest'?'最近鄰':'雙線性'}重採樣<br>裁切中心 ${esc(position({lat:m.center_lat,lon:m.center_lon}))}<br>中心定位 ${esc(dateText(m.position_at))} · 相差 ${m.position_image_offset_hours.toFixed(1)} 小時<br><a href="${esc(m.source_urls[0])}" target="_blank" rel="noreferrer">原始觀測 ↗</a>`;
+    $('image-meta').innerHTML=`${esc(m.satellite)} · 影像 ${esc(dateText(m.observed_at))}<br>156 × 156 · 8 km/pixel · ${m.resampling==='nearest'?'最近鄰':'雙線性'}重採樣<br>裁切中心 ${esc(position({lat:m.center_lat,lon:m.center_lon}))}<br>${esc(centerLabel)}<br>基準定位 ${esc(dateText(m.position_at))} · 間隔 ${m.position_image_offset_hours.toFixed(1)} 小時${motionLabel}<br><a href="${esc(m.source_urls[0])}" target="_blank" rel="noreferrer">原始觀測 ↗</a>`;
     const old=R34Data.ageHours(m.observed_at)>2;
-    $('prediction-status').textContent=record.message || (old?'此影像已超過 2 小時，僅供歷史參考。':'已於批次作業完成推論，點下方按鈕查看。');
+    $('prediction-status').textContent=(record.message || (old?'此影像已超過 2 小時，僅供歷史參考。':'已於批次作業完成推論，點下方按鈕查看。'))+(estimate?.is_estimated?' 裁切中心是移動估計，並非該時刻的新觀測定位。':'');
     if(record.status==='cached') $('infer').innerHTML='<span>◷</span> 查看上次成功結果 <span>→</span>';
     $('retry-image').hidden=false;$('retry-image').textContent='重新讀取批次結果';
   }catch(error){if(generation===state.generation)imageError(error.message);}
@@ -163,8 +168,9 @@ function renderChart(result) {
 function downloadResult() {
   const r=state.result;if(!r)return;
   const m=r.metadata;
-  const header='bin_nmi,probability,mean_nmi,storm_id,image_time_utc,position_time_utc,satellite,channel,center_lat,center_lon,model_sha256';
-  const csv=[header,...r.bins_nmi.map((b,i)=>[b,r.probabilities[i],r.mean_nmi,m.storm.id,m.observed_at,m.position_at,m.satellite,m.channel,m.center_lat,m.center_lon,r.model_sha256].join(','))].join('\r\n');
+  const e=m.center_estimation||{};
+  const header='bin_nmi,probability,mean_nmi,storm_id,image_time_utc,position_time_utc,satellite,channel,center_lat,center_lon,model_sha256,center_valid_at,center_method,position_source,motion_kmh,motion_bearing_deg';
+  const csv=[header,...r.bins_nmi.map((b,i)=>[b,r.probabilities[i],r.mean_nmi,m.storm.id,m.observed_at,m.position_at,m.satellite,m.channel,m.center_lat,m.center_lon,r.model_sha256,e.valid_at||'',e.method||'reported_unadjusted',e.reference_source||'',e.speed_kmh??'',e.bearing_deg??''].join(','))].join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download=`R34-${m.storm.id}-${m.observed_at.replace(/[:+]/g,'-')}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }

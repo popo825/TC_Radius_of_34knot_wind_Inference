@@ -73,10 +73,24 @@ python -m venv .venv
 - 空間：採 **8 km/pixel**，156 個像素的外緣寬度為 **1,248 km ≈ 673.87 n mi**。局地 WGS84 等距方位投影，北朝上，中心位於四個中央像素之間。像素中心間距 8 km，首尾中心相距 1,240 km。
 - **仍需核對訓練時的實際格網**：約 `0.078°` 並不嚴格等於 8 km；經向寬度也隨緯度改變。本版選擇固定物理範圍。若原始 GridSat 裁切使用固定經緯間距，必須調整 adapter 才能精確一致。此差異與重採樣方式可能影響辨識結果，尚未量化。
 - 正規化嚴格為 `(img_K - 236.54854) / 26.703743`，shape `[1,1,156,156]`，float32。缺值少於或等於 2% 以 245 K 補值；超過 2% 拒絕辨識。不做每張影像的 min-max normalization。
-- 限定有限亮溫 100–350 K；影像須在 90 分鐘內、定位 12 小時內，影像與定位時間差不超過 6 小時。即時中心沿用來源的最近定位，**沒有外插中心位置**；風暴移動可能造成偏心。
+- 限定有限亮溫 100–350 K；影像須在 90 分鐘內、定位 12 小時內，影像與外推基準時間差不超過 6 小時；內插只使用相隔不超過 6 小時的兩筆分析定位。裁切中心現在會對齊影像產品標示時刻，依可用定位內插或作最多 6 小時移動外推；估計不等於新的觀測，轉向、加速及結構重組仍可能造成偏心。
 - 全球清單來自 Tropical Tidbits 的 ATCF 位置摘要；失敗時只回退 NOAA NHC 海盆並顯示範圍縮限。來源失效與真正的空清單分開處理。全球清單不保證涵蓋各機構尚未列出的系統或全部擾動。
 - **全球顯示不等於全球 IR 已接通**。GOES 與 Himawari 以距星下點較近者選擇，超過 65° 的區域停止自動擷取，且另檢查整片裁切的資料覆蓋。印度洋的部分區域需要 Meteosat／IODC；NOAA CPC 公開全球 IR 約延遲兩天，所以本版不把它作為即時備援。
 - 模型主要以北大西洋資料訓練，其他海盆未驗證。模型輸出單一半徑分布，不表示四象限風圈。Softmax 曲線不是已校準的信賴區間。
+
+## 氣旋中心與影像時間對齊
+
+- 活躍系統探索仍使用 Tropical Tidbits / ATCF 清單。這個網站約每 15 分鐘更新，但上游定位主要是 00/06/12/18 UTC；不能把頁面取得時間當成新定位。
+- 以 NOAA NHC/CPHC `CurrentStorms.json` 的有效定位補充大西洋與東／中太平洋；以 JTWC warning 的 **WARNING POSITION** 補充其管轄海盆。JTWC 通報發布時間、REMARKS 中的 POSITION NEAR 不直接當成新的分析定位。
+- 同時取得最近兩個 GFS 週期中的 **NCEP TCVitals 分析紀錄**，作為官方定位與移動向量的彙整備援。使用的是 tcvitals，不是 GFS 預報路徑。相同時間優先直接的 NHC/CPHC 或 JTWC 通報；不同時間保留成歷史定位。
+- 速度單位有別：NHC JSON 的 `movementSpeed` 是 **mph**（乘 1.609344 轉 km/h），JTWC 通報是 **kt**（乘 1.852），TCVitals 為 **0.1 m/s**（乘 0.36）。方向是由真北順時針量到**移動朝向**。這些是氣旋平移速度，不是最大持續風速。
+- 影像時刻剛好有分析定位時直接使用；若介於兩筆相隔 ≤6 小時的分析定位之間，以 WGS84 測地線按時間比例內插；若晚於最新定位，用該定位的移動向量等速外推，最多 6 小時。沒有向量時，才用前兩筆相隔 0.25–12 小時的定位推算最近速度。
+- 不使用氣候平均移動向量；缺少可靠移動資訊、速度超過 200 km/h 或超過外推時限時停止該系統的新辨識，保留清楚標示的上次結果（若符合原本的保留限制）。
+- 對齊目標為目前 adapter 使用的**全圓盤掃描起始／名義時刻**；不是每一個像素的精確掃描時刻。GOES／Himawari 的全圓盤掃描有數分鐘的時間幅度。
+- JSON 的 `metadata.center_estimation` 紀錄方法、對齊時刻、基準時刻、原始座標、估計座標、移動速度／方向、位移及參考來源。CSV 也新增中心時刻、方法、來源與移動向量。側欄來源座標保留官方有效時刻，IR 下方另外列出估計裁切中心。
+- `intensity_at` 保留清單中的強度資訊時間；更新中心來源並不代表強度也在該時刻重新分析。估計中心改善幾何對中，但本次尚未量化 R34 準確度改善。
+
+來源格式：[Tropical Tidbits](https://www.tropicaltidbits.com/storminfo/)、[NHC JSON 規格](https://www.nhc.noaa.gov/productexamples/NHC_Tropical_Cyclone_Status_JSON_File_Reference.pdf)、[TCVitals 欄位與單位](https://www.emc.ncep.noaa.gov/emc/pages/infrastructure/obs-data/tcvitals_description.php)。
 
 ## 檔案與 API
 
@@ -84,6 +98,8 @@ python -m venv .venv
 backend/model.py       原始架構、權重載入、固定正規化與推論
 backend/storms.py      全球清單解析、NHC 有限範圍備援
 backend/imagery.py     原始衛星資料、對中裁切、校準與重採樣
+backend/centers.py     影像時刻中心內插／外推（WGS84）
+backend/position_sources.py NHC/CPHC、JTWC、TCVitals 定位與移動向量
 backend/app.py         FastAPI、背景下載工作、圖片與推論 API
 backend/batch.py       每小時推論、失敗隔離與靜態結果產出
 backend/fetch_model.py Release 下載與 SHA-256 核對

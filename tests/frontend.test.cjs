@@ -37,6 +37,17 @@ test('ages are based on observation time and invalid dates are never fresh',()=>
   assert.equal(ageHours(null,Date.parse(now)),Infinity);
 });
 
+test('estimated center must match the image timestamp and sampled coordinates',()=>{
+  const data=fixture(),meta=data.records['31W'].result.metadata;
+  meta.center_estimation={method:'extrapolated_motion',valid_at:now,lat:24,lon:135,
+    displacement_km:60,bearing_deg:90,speed_kmh:20};
+  assert.doesNotThrow(()=>validateSnapshot(data));
+  meta.center_estimation.valid_at='2026-11-10T07:00:00Z';
+  assert.throws(()=>validateSnapshot(data));
+  meta.center_estimation.valid_at=now;meta.center_estimation.lon=136;
+  assert.throws(()=>validateSnapshot(data));
+});
+
 test('selecting a storm and viewing results uses static data, and refresh replaces its distribution',async()=>{
   const elements=new Map(),requests=[];
   let snapshot=fixture();

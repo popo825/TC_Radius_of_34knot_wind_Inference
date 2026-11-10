@@ -38,6 +38,7 @@ def parse_tidbits(data):
 
 def fetch_storms():
     warnings = []
+    nhc_data = None
     try:
         response = requests.get(TT, timeout=(10, 30))
         response.raise_for_status()
@@ -48,7 +49,8 @@ def fetch_storms():
         response = requests.get(NHC, timeout=(10, 30))
         response.raise_for_status()
         storms = []
-        for s in response.json()['activeStorms']:
+        nhc_data = response.json()
+        for s in nhc_data['activeStorms']:
             suffix = {'al': 'L', 'ep': 'E', 'cp': 'C'}.get(s['id'][:2])
             if suffix is None:
                 continue
@@ -59,6 +61,8 @@ def fetch_storms():
                 'in_training_basin': suffix == 'L', 'source': 'NOAA NHC', 'source_url': NHC})
         scope = 'NHC-only'
     now = datetime.now(timezone.utc)
+    from .position_sources import enrich_positions
+    enrich_positions(storms, now, nhc_data)
     for s in storms:
         s['position_age_hours'] = round((now - datetime.fromisoformat(s['observed_at'].replace('Z', '+00:00'))).total_seconds()/3600, 2)
         s['stale'] = not 0 <= s['position_age_hours'] <= 12

@@ -11,6 +11,7 @@ import numpy as np
 import requests
 from pyproj import CRS, Transformer
 from scipy.ndimage import map_coordinates
+from .centers import CenterUnavailable, center_at
 
 CACHE = Path(os.getenv('R34_CACHE_DIR', str(Path(__file__).resolve().parents[1] / '.cache')))
 MAX_IMAGE_MINUTES = 90
@@ -168,10 +169,20 @@ def get_patch(storm):
     satellite = satellite_for(storm['lon'])
     # Serialize providers to avoid duplicate files and non-thread-safe netCDF reads.
     with _io_lock:
-        bucket, keys, observed = latest_himawari(now) if satellite.startswith('Himawari') else latest_goes(satellite, now)
-        if abs((observed - position_time).total_seconds()) > 6 * 3600:
-            raise DataUnavailable('影像與氣旋定位相差超過 6 小時，無法可靠對中裁切。')
-        identity = hashlib.sha256((' '.join(keys) + f'/{storm["lat"]}/{storm["lon"]}/aeqd8km-v1').encode()).hexdigest()[:24]
+        for attempt in range(3):
+            bucket, keys, observed = latest_himawari(now) if satellite.startswith('Himawari') else latest_goes(satellite, now)
+            try:
+                center = center_at(storm, observed)
+            except CenterUnavailable as exc:
+                raise DataUnavailable(str(exc)) from exc
+            selected = satellite_for(center['lon'])
+            if selected == satellite:
+                break
+            satellite = selected
+        else:
+            raise DataUnavailable('移動後的中心跨越衛星覆蓋邊界，無法選擇穩定影像來源。')
+        lat, lon = center['lat'], center['lon']
+        identity = hashlib.sha256((' '.join(keys) + f'/{lat:.8f}/{lon:.8f}/aeqd8km-motion-v2').encode()).hexdigest()[:24]
         CACHE.mkdir(parents=True, exist_ok=True)
         patch_file = CACHE / f'patch-{identity}.npy'
         if patch_file.exists():
@@ -179,7 +190,7 @@ def get_patch(storm):
         else:
             with ThreadPoolExecutor(max_workers=4) as pool:
                 paths = list(pool.map(lambda k: download(bucket, k), keys))
-            patch = sample_himawari(paths, storm['lat'], storm['lon']) if satellite.startswith('Himawari') else sample_goes(paths[0], storm['lat'], storm['lon'])
+            patch = sample_himawari(paths, lat, lon) if satellite.startswith('Himawari') else sample_goes(paths[0], lat, lon)
             if np.isfinite(patch).mean() < .98:
                 raise DataUnavailable('裁切亮溫缺值超過 2%，已停止辨識。')
             np.save(patch_file, patch, allow_pickle=False)
@@ -188,9 +199,10 @@ def get_patch(storm):
         for old in raw[30:]:
             old.unlink(missing_ok=True)
     metadata = {'id': identity, 'satellite': satellite, 'channel': 'AHI B14' if satellite.startswith('Himawari') else 'ABI C14',
-        'wavelength_um': 11.2, 'observed_at': observed.isoformat(), 'position_at': storm['observed_at'],
-        'image_age_minutes': round((now - observed).total_seconds()/60, 1), 'position_image_offset_hours': round((observed-position_time).total_seconds()/3600, 2),
-        'center_lat': storm['lat'], 'center_lon': storm['lon'], 'size_pixels': 156, 'pixel_km': 8, 'extent_km': 1248,
+        'wavelength_um': 11.2, 'observed_at': observed.isoformat(), 'position_at': center['reference_at'],
+        'image_age_minutes': round((now - observed).total_seconds()/60, 1), 'position_image_offset_hours': round(center['elapsed_hours'], 2),
+        'center_lat': lat, 'center_lon': lon, 'center_estimation': center, 'center_time_basis': 'full_disk_scan_start',
+        'size_pixels': 156, 'pixel_km': 8, 'extent_km': 1248,
         'projection': 'WGS84 local azimuthal equidistant', 'units': 'K',
         'source_urls': [f'https://{bucket}.s3.amazonaws.com/{k}' for k in keys],
         'resampling': 'nearest' if satellite.startswith('Himawari') else 'bilinear',

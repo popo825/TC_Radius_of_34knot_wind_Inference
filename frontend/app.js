@@ -9,6 +9,11 @@ const basinNames={L:'North Atlantic',E:'Eastern North Pacific',C:'Central North 
 const basinName=s=>basinNames[s.id.slice(-1)]||'Other basin';
 const methodNames={reported:'Reported position',interpolated_track:'Interpolated between analysis positions',extrapolated_motion:'Extrapolated using reported motion',extrapolated_history:'Extrapolated using recent track motion'};
 let map;
+function updateClock(){
+  const now=new Date();
+  $('live-clock').textContent=now.toISOString().replace('T',' ').slice(0,19)+' UTC';
+  $('live-clock').setAttribute('datetime',now.toISOString());
+}
 
 function availabilityReason(record){
   const message=record?.message||'';
@@ -84,7 +89,7 @@ async function refreshStorms(forceSelection=false){
     if(!response.ok)throw new Error('Latest results could not be loaded.');
     const data=R34Data.validateSnapshot(await response.json());if(request!==state.feedRequest)return;
     const changed=state.snapshot?.generation_id!==data.generation_id;state.snapshot=data;
-    $('feed-time').textContent=data.generated_at?dateText(data.generated_at):'Waiting for update';
+    $('feed-time').textContent=data.generated_at?'Updated '+dateText(data.generated_at):'Waiting for update';
     if(data.generated_at)$('feed-time').setAttribute('datetime',data.generated_at);else $('feed-time').removeAttribute('datetime');
     const warnings=[];if(data.scope==='NHC-only')warnings.push('Only NHC-covered basins are available in this update.');
     const age=R34Data.ageHours(data.generated_at);
@@ -203,4 +208,5 @@ $('retry-image').addEventListener('click',()=>refreshStorms(true));
 $('infer').addEventListener('click',runInferenceAnimation);
 $('download-result').addEventListener('click',downloadResult);
 window.addEventListener?.('hashchange',route);
+updateClock();setInterval(updateClock,1000);
 initMap();route();refreshStorms();setInterval(()=>refreshStorms(),300000);

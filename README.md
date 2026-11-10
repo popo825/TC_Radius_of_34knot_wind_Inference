@@ -1,5 +1,7 @@
 # R34 Observatory · 熱帶氣旋觀測台
 
+https://popo825.github.io/TC_Radius_of_34knot_wind_Inference/
+
 本機可執行的研究展示網站：全球氣旋地圖 → 選取系統 → 原始 11.2 µm IR 亮溫 → 既有 PyTorch 權重推論 → 59-bin 機率曲線與 mean。
 
 目前保留在本機，未發布 GitHub 或任何公開網站。沒有更動或重新訓練模型。需要 **Python / PyTorch 後端**；GitHub Pages 本身不能執行 `.pth`。

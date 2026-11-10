@@ -1,6 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from io import BytesIO
 from pathlib import Path
 import json
 import logging
@@ -9,7 +8,6 @@ import threading
 import time
 import uuid
 import numpy as np
-from PIL import Image
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +15,7 @@ from pydantic import BaseModel, Field
 from .imagery import CACHE, DataUnavailable, get_patch
 from .model import MODEL_PATH, ROOT, predict
 from .storms import fetch_storms
+from .rendering import render_ir_png
 
 app = FastAPI(title='R34 Observatory', version='0.1.0')
 log = logging.getLogger('r34')
@@ -113,16 +112,7 @@ def read_patch(patch_id):
 @app.get('/api/patches/{patch_id}/image')
 def patch_image(patch_id: str):
     patch, _ = read_patch(patch_id)
-    # Display-only palette; model always receives the untouched Kelvin array.
-    stops = np.array([170, 195, 215, 235, 255, 280, 310, 350])
-    colors = np.array([[244, 109, 163], [155, 131, 234], [87, 192, 217], [202, 231, 237],
-                       [120, 140, 153], [50, 67, 81], [15, 29, 42], [8, 18, 30]])
-    data = np.nan_to_num(patch, nan=350)
-    rgb = np.stack([np.interp(data, stops, colors[:, i]) for i in range(3)], -1).astype('uint8')
-    rgb[~np.isfinite(patch)] = [255, 190, 70]
-    out = BytesIO()
-    Image.fromarray(rgb).resize((468, 468), Image.Resampling.NEAREST).save(out, format='PNG')
-    return Response(out.getvalue(), media_type='image/png')
+    return Response(render_ir_png(patch), media_type='image/png')
 
 
 @app.post('/api/patches/{patch_id}/infer')

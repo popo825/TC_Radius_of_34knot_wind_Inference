@@ -2,15 +2,15 @@
 
 https://popo825.github.io/TC_Radius_of_34knot_wind_Inference/
 
-本機可執行的研究展示網站：全球氣旋地圖 → 選取系統 → 原始 11.2 µm IR 亮溫 → 既有 PyTorch 權重推論 → 59-bin 機率曲線與 mean。
+每小時批次推論的研究展示網站：GitHub Actions 取得全球氣旋與原始 11.2 µm IR → 既有 PyTorch 模型推論 → GitHub Pages 顯示地圖、59-bin 曲線與 mean。
 
-目前保留在本機，未發布 GitHub 或任何公開網站。沒有更動或重新訓練模型。需要 **Python / PyTorch 後端**；GitHub Pages 本身不能執行 `.pth`。
+網站前端已發布。此次每小時批次版本需推送更新並上傳模型 Release 後才會開始雲端推論。沒有更動或重新訓練模型；Python / PyTorch 只在排程工作中執行，訪客直接讀取靜態結果，不需要付費常駐後端。原本 FastAPI 仍保留作為研究用 API。
 
 ## 目前電腦啟動
 
 專案位於 `C:\Users\cwycw\OneDrive\2026_Research\R34_website`，原本的 Notebook、權重均保留。
 
-雙擊 `start.cmd`，等待終端顯示 `Uvicorn running`，然後開啟 **http://127.0.0.1:8000**。啟動後請保留終端視窗；按 Ctrl+C 停止服務。需要可對外連線的網路來更新氣旋與衛星資料。
+雙擊 `start.cmd`，先產出一批最新觀測，等待顯示 HTTP server 已啟動，然後開啟 **http://127.0.0.1:8000**。啟動後請保留終端視窗；按 Ctrl+C 停止服務。需要可對外連線的網路來更新氣旋與衛星資料。
 
 也可從 PowerShell 執行：
 
@@ -29,19 +29,41 @@ cd 'C:\Users\cwycw\OneDrive\2026_Research\R34_website'
 python -m venv .venv
 .\.venv\Scripts\python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 .\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python -m backend.batch --output dist
+.\.venv\Scripts\python -m http.server 8000 --bind 127.0.0.1 --directory dist
 ```
 
 預設讀取根目錄的 `TCR34_reference_DNN_test1_25MAE.pth`。更換模型時設定 `$env:R34_MODEL_PATH='C:/path/model.pth'` 並重啟服務；新權重需維持相同架構與 bins。`.env.example` 只說明設定，不會自動載入。模型以 `weights_only=True` 與必要的 NumPy 型別白名單讀取，禁止退回任意 pickle 執行。
 
-## 使用
+## 每小時雲端更新與第一次啟用
 
-1. 網站啟動後載入活躍清單，從地圖或側欄選氣旋。橘色為北大西洋以外的跨域實驗，灰色代表定位過期。
-2. 後端依位置選擇 GOES-19、GOES-18 或 Himawari-9，下載校準所需的原始資料並裁切。
-3. IR 顯示完成後按 **開始 R34 辨識**。輸出 59 個 bin 的 Softmax 機率與 `mean = Σ pᵢrᵢ`，單位為海浬。
-4. **CSV ↓** 匯出機率、mean、中心、影像與定位時間、衛星頻道與模型 SHA-256。
+1. 此 repo 的 **Settings → Pages → Source** 維持 **GitHub Actions**。
+2. 在 **Releases → Draft a new release** 建立 tag **`model-v1`**，title 可填 `R34 model v1`。把原始 `TCR34_reference_DNN_test1_25MAE.pth` 拖入 release assets，等待上傳完成後按 **Publish release**。公開 repo 的 Release 權重任何人都可下載；這是依本次選擇公開權重的設定。
+3. 把這次修改的程式與 `.github/workflows/pages.yml` 提交並推送到 `main`。工作流程會自動執行；也可到 **Actions → Hourly R34 inference and Pages → Run workflow** 手動執行。
+4. 預設從 `https://github.com/popo825/TC_Radius_of_34knot_wind_Inference/releases/download/model-v1/TCR34_reference_DNN_test1_25MAE.pth` 下載模型，SHA-256 必須符合 `3bca4f0a6007678298203692c29c17181753632e7fec2132105b1a7939a5a410`。模型下載失敗或雜湊不符時不發布新網站。
+5. 成功後，GitHub Pages 會顯示本批次的全球系統、IR 與推論結果。網站每 5 分鐘檢查新批次；訪客按「查看 R34 辨識結果」只顯示已完成的推論，不啟動新運算。
 
-即時案例沒有 Ground Truth，因此不畫真值、軟標籤或 MAE。`25MAE` 只是既有模型檔名，不是本網站已驗證的即時準確度。沒有示範或隨機預測混入實時清單。
+排程為 `17 * * * *`，即每小時第 17 分鐘啟動（UTC 與台灣時間在每小時的分鐘數相同）。這是**啟動時間**，不是影像的觀測時間或結果完成時間。工作在 GitHub 的標準 Ubuntu runner 上執行；你的電腦可以關機。
+
+更換模型下載位置可在 **Settings → Secrets and variables → Actions → Variables** 設定 `R34_MODEL_URL` 與 `R34_MODEL_SHA256`。只有相同架構／bins 的新權重可直接更換；請同步更新實際 SHA-256。不要把權重加入一般 Git 提交，它仍被 `.gitignore` 排除。Release 資產與普通 Git 檔案是不同的儲存方式。
+
+### 費用與排程限制
+
+- 目前公開 repo 的標準 GitHub-hosted runner 運算免費；不使用付費大型 runner 或 GPU。Pages 受網站容量與流量限制。
+- pip 套件與已驗證模型使用 Actions cache；不快取原始衛星檔。Pages artifact 只保留 1 天，只上傳 `dist`。仍需留意帳號的 cache／artifact 儲存配額及未來政策，不能視為無上限資源。
+- 原始衛星資料與權重不發布到 Pages。產出圖、CSV、JSON 可公開下載，但不會每小時把新影像提交進 Git 歷史。
+- GitHub 排程可能延遲或漏跑，公開 repo 60 天沒有活動時可能停用排程。這是研究展示更新，不是保證準點的作業服務。
+- 網站超過 2 小時未更新會警示；影像與定位時間分別顯示。單一氣旋失敗可沿用同一模型、影像 6 小時內的上次成功結果並標為「上次成功」。整體清單來源失效時批次失敗，保留原部署。
+- 部分印度洋系統缺乏目前 adapter 可用的即時 11.2 µm 覆蓋，仍會列出但不產生假預測。
+
+### 網站操作
+
+1. 從地圖或側欄選取氣旋，載入最近一批的 IR 裁切。
+2. 按 **查看 R34 辨識結果**，顯示 59 個 bin 的 Softmax 機率與 `mean = Σ pᵢrᵢ`。
+3. 按 **CSV ↓** 匯出分布、mean、中心、影像／定位時間、頻道與模型 SHA-256。
+4. 按重新整理只重新讀取已發布批次，不會要求雲端重新推論；專案管理者可在 Actions 手動啟動一次工作。
+
+沒有 Ground Truth，因此不畫真值、軟標籤或 MAE。`25MAE` 只是既有模型檔名，不是本網站已驗證的即時準確度。
 
 ## 科學規格與限制
 
@@ -63,7 +85,10 @@ backend/model.py       原始架構、權重載入、固定正規化與推論
 backend/storms.py      全球清單解析、NHC 有限範圍備援
 backend/imagery.py     原始衛星資料、對中裁切、校準與重採樣
 backend/app.py         FastAPI、背景下載工作、圖片與推論 API
-frontend/              無需 Node build 的靜態介面與本地 Leaflet／海岸線
+backend/batch.py       每小時推論、失敗隔離與靜態結果產出
+backend/fetch_model.py Release 下載與 SHA-256 核對
+frontend/              純靜態介面與本地 Leaflet／海岸線
+.github/workflows/     排程推論與 Pages 發布
 tests/                 科學與 API 不變量檢查
 artifacts/             本次真實案例輸出（預設不提交版本控制）
 ```
@@ -83,24 +108,31 @@ artifacts/             本次真實案例輸出（預設不提交版本控制）
 $env:PYTHONPATH="$PWD/.runtime"
 python -m unittest discover -s tests -v
 node --check frontend/app.js
+node --test tests/frontend.test.cjs
 ```
 
 測試包含格網方向及實距、南北／東西半球定位、資料來源格式變更、缺值與單位拒絕、正規化與 mean、過期推論阻擋及真實 checkpoint 形狀。另有下載當日 GOES 與 Himawari 真實觀測的端到端實測，詳見 `artifacts/validation.md`。測試通過不代表氣象準確度已驗證。
 
 新電腦若要執行測試，請另安裝 `python -m pip install -r requirements-dev.txt`（TestClient 需要 HTTPX）。
 
-## 未來 GitHub／部署
+## 本機批次與研究 API
 
-已提供 `.gitignore`，忽略 `.pth`（原檔約 115 MB，超過一般 GitHub 單檔限制）、Notebook、套件與快取。尚未建立或推送遠端 repository。未來上傳時把此專案的原始碼提交即可；權重另存伺服器、受控儲存或 Git LFS。
-
-最直接的部署是讓 Python 服務同時供應前端與 API，避免跨網域問題。可在支援 Python 的 VM／容器服務使用 `Dockerfile`：
-
-```sh
-docker build -t r34-observatory .
-docker run --rm -p 8000:8000 -v /absolute/path/model.pth:/models/model.pth:ro -e R34_MODEL_PATH=/models/model.pth r34-observatory
+```powershell
+$env:PYTHONPATH="$PWD/.runtime"
+python -m backend.batch --output dist
+python -m http.server 8000 --bind 127.0.0.1 --directory dist
 ```
 
-若使用 GitHub Pages 放前端，需先增加可設定 API origin、後端 CORS 與 HTTPS；本版採同源設計，不能直接把靜態目錄推上 Pages 就期待 `.pth` 可執行。公開上線前另需加入適當的工作佇列、使用量限制與監控。
+`dist/data/latest.json` 包含當批系統及完整結果；`dist/data/products/` 包含每個系統的 PNG、JSON、CSV。`dist`、`.models` 與原始資料快取不加入 Git。`start.ps1 -SkipUpdate -Port 8001` 可直接預覽已存在的批次。
+
+保留的 FastAPI 可用 `python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000` 啟動並從 `/docs` 使用；其首頁提供靜態前端原始檔，沒有建立批次時只顯示等待狀態。原有 Dockerfile 提供這個研究 API，GitHub Actions 的每小時方案不使用 Dockerfile。
+
+## 參考政策
+
+- [GitHub Actions 計費](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+- [排程事件與限制](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
+- [GitHub Pages 限制](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)
+- [Release 資產容量](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 
 ## 資料與第三方元件
 

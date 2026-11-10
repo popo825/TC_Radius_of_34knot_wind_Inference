@@ -1,17 +1,10 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const state = { storms: [], selected: null, generation: 0, patch: null, result: null, markers: [], requestController: null };
+const state = { storms: [], selected: null, generation: 0, patch: null, result: null, markers: [], snapshot: null, feedRequest: 0 };
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateText = value => new Date(value).toISOString().replace('T', ' ').slice(0,16) + ' UTC';
 const position = s => `${Math.abs(s.lat).toFixed(1)}°${s.lat>=0?'N':'S'}  ${Math.abs(s.lon).toFixed(1)}°${s.lon>=0?'E':'W'}`;
 const shortName = s => s.name.replace(/^(Tropical (Cyclone|Storm|Depression)|Hurricane|Typhoon|Super Typhoon)\s+/i, '');
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } });
-  const data = await response.json();
-  if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `服務回應 ${response.status}`);
-  return data;
-}
 let map;
 function initMap() {
   if (!window.L) { $('map').textContent = '地圖元件無法載入，仍可從左側清單選取氣旋。'; return; }
@@ -53,29 +46,44 @@ function renderStorms() {
     }
   });
 }
-async function refreshStorms() {
+async function refreshStorms(forceSelection=false) {
+  const request=++state.feedRequest;
   $('refresh').disabled=true;
   try {
-    const data=await api('/api/storms');
-    state.storms=data.storms;
-    $('feed-status').textContent=data.scope==='global'?'全球清單已連線':'NHC 海盆清單';
-    $('feed-time').textContent='取得 '+dateText(data.fetched_at);
-    $('feed-warning').hidden=!data.warnings.length;
-    $('feed-warning').textContent=data.warnings.join(' ');
-    if(state.selected) {
-      const previous=state.selected, updated=state.storms.find(s=>s.id===previous.id);
-      if(!updated) clearSelection();
-      else if(updated.observed_at!==previous.observed_at || updated.lat!==previous.lat || updated.lon!==previous.lon) {
-        selectStorm(updated.id,false);
-      }
+    const response=await fetch('data/latest.json',{cache:'no-store'});
+    if(!response.ok) throw new Error('無法讀取最新批次資料。');
+    const data=R34Data.validateSnapshot(await response.json());
+    if(request!==state.feedRequest)return;
+    const changed=state.snapshot?.generation_id!==data.generation_id;
+    state.snapshot=data;
+    const warnings=[...data.warnings];
+    const age=R34Data.ageHours(data.generated_at);
+    if(data.status==='awaiting_first_run') {
+      clearSelection();state.storms=[];renderStorms();
+      $('storm-list').innerHTML='<div class="list-message">等待第一次每小時辨識結果。</div>';
+      $('feed-status').textContent='尚未完成首批推論';$('feed-time').textContent='每小時自動更新';
+    } else {
+      if(age>2) warnings.push('最新批次已超過 2 小時未更新；目前顯示歷史資料，請留意觀測時間。');
+      if(age<-.1) warnings.push('裝置時間與批次時間不一致，請確認電腦時鐘。');
+      state.storms=data.storms.map(s=>({...s,stale:age>2 || R34Data.ageHours(s.observed_at)>12 || R34Data.ageHours(s.observed_at)<0}));
+      $('feed-status').textContent=data.scope==='global'?'全球清單 · 每小時批次':'NHC 海盆 · 每小時批次';
+      $('feed-time').textContent='批次 '+dateText(data.generated_at);
     }
-    renderStorms();
+    $('feed-warning').hidden=!warnings.length;
+    $('feed-warning').textContent=warnings.join(' ');
+    if(state.selected) {
+      const updated=state.storms.find(s=>s.id===state.selected.id);
+      if(!updated) clearSelection();
+      else if(changed || forceSelection) selectStorm(updated.id,false);
+    }
+    if(data.status!=='awaiting_first_run') renderStorms();
   } catch(error) {
+    if(request!==state.feedRequest)return;
     $('feed-warning').hidden=false;
-    $('feed-warning').textContent=error.message+' 如有上次清單，僅供定位參考。';
-    $('feed-status').textContent='來源連線失敗';
-    if(!state.storms.length) $('storm-list').innerHTML='<div class="list-message">暫時無法取得清單。請檢查網路後按 ↻ 重試。</div>';
-  } finally { $('refresh').disabled=false; }
+    $('feed-warning').textContent=error.message+' 如有上次結果，僅供歷史資料參考。';
+    $('feed-status').textContent='批次資料讀取失敗';
+    if(!state.storms.length) $('storm-list').innerHTML='<div class="list-message">暫時無法讀取每小時結果。請按 ↻ 重試。</div>';
+  } finally { if(request===state.feedRequest)$('refresh').disabled=false; }
 }
 function clearSelection() {
   state.generation++;state.selected=null;state.patch=null;state.result=null;
@@ -83,12 +91,12 @@ function clearSelection() {
 }
 function imageError(message) {
   $('image-state').hidden=false;$('image-state').classList.add('error');
-  $('image-state').innerHTML=`<span class="loader"></span><p>${esc(message)}</p><small>僅接受校準的原始 Kelvin 亮溫</small>`;
+  $('image-state').innerHTML=`<span class="loader"></span><p>${esc(message)}</p><small>每小時更新；只使用校準的 Kelvin 亮溫</small>`;
   $('ir-image').hidden=true;$('image-crosshair').hidden=true;
   $('retry-image').hidden=false;$('infer').disabled=true;
-  $('image-meta').textContent='本次尚未取得可用的原始亮溫。';
+  $('image-meta').textContent='本批次尚無可顯示的辨識影像。';
 }
-async function selectStorm(id, focus=true) {
+function selectStorm(id, focus=true) {
   const storm=state.storms.find(s=>s.id===id);if(!storm)return;
   const generation=++state.generation;
   state.selected=storm;state.patch=null;state.result=null;
@@ -98,56 +106,41 @@ async function selectStorm(id, focus=true) {
   $('domain-tag').textContent=storm.in_training_basin?'● 北大西洋 · 訓練海盆':'● 跨海盆實驗 · 尚未驗證準確度';
   $('domain-tag').classList.toggle('in-basin',storm.in_training_basin);
   $('selected-position').textContent=position(storm);$('selected-wind').textContent=`${storm.wind_kt??'—'} kt / ${storm.pressure_hpa??'—'} hPa`;
-  $('position-time').textContent='定位 '+dateText(storm.observed_at)+(storm.stale?' · 已過期':'');
-  $('image-meta').textContent='正在尋找最近 90 分鐘內的 11.2 µm 觀測…';
+  $('position-time').textContent='清單定位 '+dateText(storm.observed_at)+(storm.stale?' · 資料過期':'');
+  $('image-meta').textContent='讀取本批次 11.2 µm 觀測…';
+  $('prediction-status').textContent='';
   $('channel-label').textContent='11.2 µm';$('infer').disabled=true;
-  $('infer').innerHTML='<span>✧</span> 開始 R34 辨識 <span>→</span>';
+  $('infer').innerHTML='<span>✧</span> 查看 R34 辨識結果 <span>→</span>';
   $('retry-image').hidden=true;$('ir-image').hidden=true;$('image-crosshair').hidden=true;
   $('image-state').hidden=false;$('image-state').classList.remove('error');
-  $('image-state').innerHTML='<span class="loader"></span><p>擷取衛星原始資料…</p><small>首次下載與校準約需 20–90 秒</small>';
+  $('image-state').innerHTML='<span class="loader"></span><p>載入批次 IR 影像…</p><small>顯示最近一次每小時辨識結果</small>';
   renderStorms();
   if(focus&&map) map.setView([storm.lat,storm.lon],3,{animate:false});
   try {
-    if(storm.stale) throw new Error('定位資料超過 12 小時，無法可靠對中裁切。');
-    const {job_id}=await api('/api/imagery',{method:'POST',body:JSON.stringify({storm_id:id})});
-    const started=Date.now();let job;
-    do {
-      if(generation!==state.generation)return;
-      if(Date.now()-started>300000)throw new Error('衛星資料擷取超時，請稍後重試。');
-      job=await api('/api/jobs/'+job_id);
-      if(job.status==='loading')await delay(1500);
-    }while(job.status==='loading');
-    if(generation!==state.generation)return;
-    if(job.status==='failed')throw new Error(job.message);
-    state.patch=job.metadata;
+    const record=state.snapshot.records[id];
+    if(!record || record.status==='unavailable') throw new Error(record?.message||'本批次未產生此系統的辨識結果。');
+    state.patch=record.result.metadata;state.result=record.result;
     const img=$('ir-image');
     img.onload=()=>{if(generation!==state.generation)return;$('image-state').hidden=true;img.hidden=false;$('image-crosshair').hidden=false;$('infer').disabled=false;};
-    img.onerror=()=>{if(generation===state.generation)imageError('影像顯示失敗，請重新擷取。');};
-    img.src=job.image_url;
-    const m=job.metadata;
+    img.onerror=()=>{if(generation===state.generation)imageError('批次影像載入失敗，請重新讀取。');};
+    img.src=record.image_url+'?v='+encodeURIComponent(state.snapshot.generation_id);
+    const m=record.result.metadata;
     $('channel-label').textContent=m.channel+' · '+m.wavelength_um+' µm';
-    $('image-meta').innerHTML=`${esc(m.satellite)} · ${esc(dateText(m.observed_at))}<br>156 × 156 · 8 km/pixel · ${m.resampling==='nearest'?'最近鄰':'雙線性'}重採樣<br>影像與定位相差 ${m.position_image_offset_hours.toFixed(1)} 小時 · <a href="${esc(m.source_urls[0])}" target="_blank" rel="noreferrer">原始觀測 ↗</a>`;
-    $('retry-image').hidden=false;$('retry-image').textContent='重新擷取最新影像';
+    $('image-meta').innerHTML=`${esc(m.satellite)} · 影像 ${esc(dateText(m.observed_at))}<br>156 × 156 · 8 km/pixel · ${m.resampling==='nearest'?'最近鄰':'雙線性'}重採樣<br>裁切中心 ${esc(position({lat:m.center_lat,lon:m.center_lon}))}<br>中心定位 ${esc(dateText(m.position_at))} · 相差 ${m.position_image_offset_hours.toFixed(1)} 小時<br><a href="${esc(m.source_urls[0])}" target="_blank" rel="noreferrer">原始觀測 ↗</a>`;
+    const old=R34Data.ageHours(m.observed_at)>2;
+    $('prediction-status').textContent=record.message || (old?'此影像已超過 2 小時，僅供歷史參考。':'已於批次作業完成推論，點下方按鈕查看。');
+    if(record.status==='cached') $('infer').innerHTML='<span>◷</span> 查看上次成功結果 <span>→</span>';
+    $('retry-image').hidden=false;$('retry-image').textContent='重新讀取批次結果';
   }catch(error){if(generation===state.generation)imageError(error.message);}
 }
-async function runInference() {
-  if(!state.patch)return;
-  const generation=state.generation;
-  $('infer').disabled=true;$('infer').textContent='正在執行模型推論…';
-  try {
-    const result=await api(`/api/patches/${state.patch.id}/infer`,{method:'POST'});
-    if(generation!==state.generation)return;
-    state.result=result;$('result').hidden=false;
-    $('mean-value').textContent=result.mean_nmi.toFixed(1);
-    $('mean-km').textContent='≈ '+(result.mean_nmi*1.852).toFixed(1)+' km';
-    $('result-time').textContent='辨識 '+dateText(result.inferred_at)+' · 權重 '+result.model_sha256.slice(0,10);
-    renderChart(result);
-    $('infer').innerHTML='<span>✓</span> 辨識完成 <span>↻</span>';
-  }catch(error){
-    if(generation!==state.generation)return;
-    $('result').hidden=false;$('chart').textContent='';$('mean-value').textContent='—';$('mean-km').textContent='';
-    $('result-time').textContent=error.message;$('infer').textContent='重新執行辨識';
-  }finally{if(generation===state.generation)$('infer').disabled=false;}
+function showResult() {
+  const result=state.result;if(!result)return;
+  $('result').hidden=false;
+  $('mean-value').textContent=result.mean_nmi.toFixed(1);
+  $('mean-km').textContent='≈ '+(result.mean_nmi*1.852).toFixed(1)+' km';
+  $('result-time').textContent='推論 '+dateText(result.inferred_at)+' · 批次 '+dateText(state.snapshot.generated_at)+' · 權重 '+result.model_sha256.slice(0,10);
+  renderChart(result);
+  $('infer').innerHTML='<span>✓</span> 已顯示辨識結果 <span>↓</span>';
 }
 function renderChart(result) {
   const W=340,H=210,pad={l:38,r:12,t:17,b:34},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
@@ -176,13 +169,13 @@ function downloadResult() {
   a.href=url;a.download=`R34-${m.storm.id}-${m.observed_at.replace(/[:+]/g,'-')}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function clockTick() {$('clock').textContent=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';}
-$('refresh').addEventListener('click',refreshStorms);
+$('refresh').addEventListener('click',()=>refreshStorms(true));
 $('basin-filter').addEventListener('change',renderStorms);
 $('reset-map').addEventListener('click',resetMap);
-$('retry-image').addEventListener('click',()=>state.selected&&selectStorm(state.selected.id,false));
-$('infer').addEventListener('click',runInference);
+$('retry-image').addEventListener('click',()=>refreshStorms(true));
+$('infer').addEventListener('click',showResult);
 $('download-result').addEventListener('click',downloadResult);
 ['about-button','notice-about'].forEach(id=>$(id).addEventListener('click',()=>$('about-dialog').showModal()));
 $('close-about').addEventListener('click',()=>$('about-dialog').close());
 $('about-dialog').addEventListener('click',event=>{if(event.target===$('about-dialog'))$('about-dialog').close();});
-clockTick();setInterval(clockTick,1000);initMap();refreshStorms();setInterval(refreshStorms,300000);
+clockTick();setInterval(clockTick,1000);initMap();refreshStorms();setInterval(()=>refreshStorms(),300000);

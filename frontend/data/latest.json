@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "mode": "hourly",
+  "status": "awaiting_first_run",
+  "generated_at": null,
+  "fetched_at": null,
+  "generation_id": "not-yet-generated",
+  "scope": "pending",
+  "storms": [],
+  "records": {},
+  "warnings": ["等待第一次每小時批次推論；目前尚未產生辨識結果。"]
+}

@@ -55,13 +55,14 @@ test('selecting a storm and viewing results uses static data, and refresh replac
     if(!elements.has(id)) elements.set(id,{
       hidden:false,disabled:false,textContent:'',innerHTML:'',value:id==='basin-filter'?'all':'',events:{},
       classList:{add(){},remove(){},toggle(){}},querySelectorAll(){return[];},
+      setAttribute(name,value){this[name]=value;},removeAttribute(name){delete this[name];},
       addEventListener(name,callback){this.events[name]=callback;},
       set src(value){this.currentSrc=value;if(this.onload)this.onload();}
     });
     return elements.get(id);
   };
-  const context=vm.createContext({document:{getElementById:get},window:{},R34Data:{validateSnapshot,ageHours},
-    Date,Set,URL,console,encodeURIComponent,setInterval(){},setTimeout(){},
+  const context=vm.createContext({document:{getElementById:get,querySelectorAll(){return[];}},window:{},R34Data:{validateSnapshot,ageHours},
+    Date,Set,URL,console,encodeURIComponent,setInterval(){},setTimeout(fn){fn();},
     fetch:async path=>{requests.push(path);return {ok:true,json:async()=>structuredClone(snapshot)};}});
   // No browser API is used here; this tests application state and static requests.
   vm.runInContext(fs.readFileSync(require.resolve('../frontend/app.js'),'utf8'),context);
@@ -69,15 +70,30 @@ test('selecting a storm and viewing results uses static data, and refresh replac
   context.selectStorm('31W');
   assert.equal(get('ir-image').hidden,false);
   assert.equal(get('infer').disabled,false);
-  get('infer').events.click();
+  assert.equal(get('image-time-row').hidden,false);
+  assert.match(get('image-time').textContent,/UTC$/);
+  assert.equal(get('ir-radius').hidden,true);
+  const circles=[];
+  context.L={circle(center,options){const layer={center,options,removed:false,addTo(){return this;},remove(){this.removed=true;},getBounds(){return 'radius bounds';}};circles.push(layer);return layer;}};
+  vm.runInContext('map={fitBounds(bounds,options){this.bounds=bounds;this.options=options;}}',context);
+  await get('infer').events.click();
   assert.equal(get('mean-value').textContent,'155.0');
   assert.equal(get('result').hidden,false);
   assert.match(get('chart').innerHTML,/<svg/);
+  assert.equal(get('ir-radius').hidden,false);
+  assert.match(get('ir-radius').innerHTML,/r="287\.06"/);
+  assert.match(get('radius-legend').textContent,/155.0 n mi/);
+  assert.match(get('radius-legend').textContent,/Inference Result · Weighted Mean:/);
+  assert.equal(circles.length,0);
+  assert.match(get('ir-radius').innerHTML,/radius-outline/);
+  assert.match(get('ir-radius').innerHTML,/radius-highlight/);
+  context.clearRadius();assert.equal(get('ir-radius').hidden,true);
+  vm.runInContext('map=undefined',context);
   snapshot=fixture();snapshot.generation_id='batch-2';
   snapshot.records['31W'].result.probabilities=Array(59).fill(0);
   snapshot.records['31W'].result.probabilities[38]=1;
   snapshot.records['31W'].result.mean_nmi=200;
-  await context.refreshStorms();get('infer').events.click();
+  await context.refreshStorms();await get('infer').events.click();
   assert.equal(get('mean-value').textContent,'200.0');
   assert.match(get('ir-image').currentSrc,/batch-2/);
   snapshot=fixture();snapshot.generation_id='batch-3';
@@ -85,6 +101,38 @@ test('selecting a storm and viewing results uses static data, and refresh replac
   await context.refreshStorms();
   assert.equal(get('infer').disabled,true);
   assert.equal(get('result').hidden,true);
+  assert.equal(get('ir-radius').hidden,true);
+  assert.equal(get('radius-legend').hidden,true);
+  assert.equal(get('image-time-row').hidden,true);
   assert.match(get('image-state').innerHTML,/No native coverage/);
   assert.ok(requests.every(path=>path==='data/latest.json'));
+  context.setPage('tutorial');
+  assert.equal(get('view-tutorial').hidden,false);
+  assert.equal(get('view-monitor').hidden,true);
+  context.setPage('research');
+  assert.equal(get('view-research').hidden,false);
+  assert.match(get('record-fields').innerHTML,/Position valid at/);
+  assert.match(context.markerMarkup({id:'03S',name:'South',lat:-10}),/southern/);
+  assert.doesNotMatch(context.markerMarkup({id:'31W',name:'North',lat:20}),/southern/);
+});
+
+test('a delayed reveal cannot display a previously selected storm',async()=>{
+  const elements=new Map(),timers=[];let snapshot=fixture();
+  const get=id=>{
+    if(!elements.has(id))elements.set(id,{hidden:false,disabled:false,textContent:'',innerHTML:'',value:id==='basin-filter'?'all':'',
+      classList:{add(){},remove(){}},querySelectorAll(){return[];},setAttribute(){},
+      addEventListener(){},set src(value){if(this.onload)this.onload();}});
+    return elements.get(id);
+  };
+  const context=vm.createContext({document:{getElementById:get,querySelectorAll(){return[];}},window:{},
+    R34Data:{validateSnapshot,ageHours},Date,Set,URL,console,encodeURIComponent,setInterval(){},setTimeout(fn){timers.push(fn);},
+    fetch:async()=>({ok:true,json:async()=>structuredClone(snapshot)})});
+  vm.runInContext(fs.readFileSync(require.resolve('../frontend/app.js'),'utf8'),context);
+  await context.refreshStorms();context.selectStorm('31W');
+  const pending=context.runInferenceAnimation();
+  assert.equal(get('analysis-animation').hidden,false);
+  context.clearSelection();timers.forEach(fn=>fn());await pending;
+  assert.equal(get('selection').hidden,true);
+  assert.equal(get('result').hidden,true);
+  assert.equal(get('analysis-animation').hidden,true);
 });

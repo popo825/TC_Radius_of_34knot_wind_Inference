@@ -1,60 +1,103 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0a1520">
-  <meta name="description" content="熱帶氣旋 R34 實驗性每小時辨識平台。衛星紅外線亮溫、59-bin 機率分布與風圈半徑估計。">
-  <title>R34 Observatory · 熱帶氣旋觀測台</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect rx='10' width='40' height='40' fill='%230b1824'/%3E%3Ccircle cx='20' cy='20' r='12' fill='none' stroke='%237de1c3' stroke-width='4'/%3E%3Ccircle cx='20' cy='20' r='4' fill='%237de1c3'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#102638">
+  <meta name="description" content="Explore active tropical cyclones and satellite-based estimates of the radius of 34-knot winds. A research project at National Central University.">
+  <title>R34 · Global Monitor</title>
+  <link rel="icon" href="assets/cyclone.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css"><link rel="stylesheet" href="styles.css">
   <script defer src="vendor/leaflet.js"></script><script defer src="data-contract.js"></script><script defer src="app.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="./" aria-label="R34 Observatory 首頁"><span class="brand-symbol">◎</span><strong>R34<span>OBSERVATORY</span></strong></a>
-    <nav aria-label="主要導覽"><a class="active" href="#overview">全球監測</a><button id="about-button">模型與資料</button></nav>
-    <div class="header-meta"><span class="experimental">EXPERIMENTAL</span><time id="clock"></time></div>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="#monitor" aria-label="R34 home">R34<span>Wind Radius</span></a>
+    <nav class="main-nav" aria-label="Main navigation">
+      <a href="#monitor" data-page="monitor" aria-current="page">Global Monitor</a>
+      <a href="#tutorial" data-page="tutorial">Tutorial</a>
+      <a href="#research" data-page="research">Research</a>
+    </nav>
+    <div class="header-status"><span class="experimental-label">Experimental</span><time id="feed-time">Waiting for update</time></div>
   </header>
-  <main id="overview">
-    <section class="intro">
-      <div><div class="eyebrow"><span class="signal"></span> TROPICAL CYCLONE INTELLIGENCE</div><h1>從雲系，看見風圈。</h1><p>全球熱帶氣旋監測 · 11.2 µm 紅外線 · 每小時批次辨識</p></div>
-      <div class="intro-aside"><span>34 kt</span><p>熱帶風暴風速門檻<br><b>風圈半徑估計 / 海浬</b></p></div>
+
+  <main id="main">
+    <section id="view-monitor" class="page-view" aria-labelledby="monitor-title">
+      <div class="page-heading"><h1 id="monitor-title">Global Monitor</h1><a class="threshold" href="#tutorial-r34" aria-label="Learn about the 34-knot wind threshold"><strong>34<span>kt</span></strong><span class="info-symbol" aria-hidden="true">i</span></a></div>
+      <p class="reminder"><strong>Reminder:</strong> This model is trained on the Atlantic Basin. Other basins are experimental.</p>
+      <div id="feed-warning" class="service-warning" role="status" hidden></div>
+
+      <section class="monitor-workspace" aria-label="Tropical cyclone monitor">
+        <aside class="storm-sidebar" aria-label="Active tropical cyclones">
+          <div class="list-heading"><h2>Active storms <span id="storm-count">—</span></h2><button id="refresh" class="icon-button" aria-label="Refresh latest published results" title="Refresh published results">↻</button></div>
+          <label class="sr-only" for="basin-filter">Filter by basin</label>
+          <select id="basin-filter"><option value="all">All basins</option><option value="L">North Atlantic</option><option value="W">Western North Pacific</option><option value="EC">Eastern &amp; Central Pacific</option><option value="ABSP">Indian Ocean &amp; Southern Hemisphere</option></select>
+          <div id="storm-list" aria-live="polite"><p class="list-message">Loading storms…</p></div>
+        </aside>
+
+        <div class="map-column"><div id="map" aria-label="Map of active tropical cyclones"></div><button id="reset-map" class="map-reset" aria-label="Reset to global view">Global view ↗</button></div>
+
+        <aside class="analysis-panel" aria-label="Selected storm and R34 estimate">
+          <div id="empty-selection" class="empty-selection"><img src="assets/cyclone.svg" alt="" width="52" height="52"><h2>Select a storm</h2><p>Choose a system on the map<br>or from the list.</p></div>
+          <div id="selection" hidden>
+            <div class="analysis-heading"><div><p id="selected-basin" class="basin-label"></p><h2 id="selected-name"></h2></div><span id="selected-id" class="storm-id"></span></div>
+            <div class="storm-facts"><span id="selected-position"></span><span id="selected-wind"></span></div>
+            <p id="image-time-row" class="image-time" hidden>Image · <time id="image-time"></time></p>
+            <div id="ir-frame" class="ir-frame">
+              <img id="ir-image" alt="Storm-centered infrared satellite image" hidden>
+              <div id="ir-radius" class="ir-radius" hidden></div>
+              <span class="north-arrow" aria-hidden="true">N ↑</span><span id="image-crosshair" class="crosshair" hidden aria-hidden="true"></span>
+              <div id="image-state" class="image-state" role="status"><span class="loader" aria-hidden="true"></span><p>Loading image…</p></div>
+              <div id="analysis-animation" class="analysis-animation" hidden><span class="scan-line"></span><div><span class="loader" aria-hidden="true"></span><strong>Preparing R34 estimate</strong><span>Loading hourly model output</span></div></div>
+            </div>
+            <div class="color-scale" aria-label="Brightness temperature from 170 to 310 Kelvin"><span>170 K</span><div></div><span>310 K</span></div>
+            <p id="radius-legend" class="radius-legend" hidden></p>
+            <button id="infer" class="infer-button" disabled><span>Infer R34 Using Our Model</span><span aria-hidden="true">→</span></button>
+            <a class="result-details-link" href="#research">Learn more about how we develop our model ↗</a>
+            <button id="retry-image" class="text-button" hidden>Reload results</button>
+            <div id="inference-status" class="sr-only" role="status" aria-live="polite"></div>
+            <section id="result" class="result" aria-labelledby="result-title" hidden>
+              <div class="result-heading"><h3 id="result-title">Estimated R34</h3><button id="download-result" class="text-button" aria-label="Download the prediction distribution as CSV">CSV ↓</button></div>
+              <div class="radius-value"><strong id="mean-value"></strong><span>n mi</span><small id="mean-km"></small></div>
+              <div id="chart"></div>
+              <p id="result-warning" class="result-warning" hidden></p>
+            </section>
+          </div>
+        </aside>
+      </section>
     </section>
-    <div class="notice"><span class="notice-icon">i</span><p><strong>研究展示版本</strong>　模型主要以<strong>北大西洋</strong>資料訓練；其他海盆為跨域實驗，尚未驗證準確度。結果供研究參考。</p><button id="notice-about" aria-label="查看模型說明">了解模型 ↗</button></div>
-    <div id="feed-warning" class="feed-warning" hidden role="status"></div>
-    <section class="workspace" aria-label="全球氣旋監測工作區">
-      <aside class="storm-sidebar">
-        <div class="section-heading"><div><span class="eyebrow">ACTIVE SYSTEMS</span><h2>活躍系統 <span id="storm-count" class="count">—</span></h2></div><button id="refresh" class="icon-button" title="更新氣旋清單" aria-label="更新氣旋清單">↻</button></div>
-        <label class="filter-label" for="basin-filter">監測海盆</label><select id="basin-filter"><option value="all">全部海盆</option><option value="L">北大西洋</option><option value="W">西北太平洋</option><option value="EC">東／中太平洋</option><option value="ABSP">印度洋／南半球</option></select>
-        <div id="storm-list" aria-live="polite"><div class="list-message">正在讀取每小時批次資料…</div></div>
-        <div class="sidebar-footer"><span class="signal"></span><span id="feed-status">等待資料來源</span><small id="feed-time">每小時更新 · 每 5 分鐘檢查新結果</small></div>
-      </aside>
-      <div class="map-column">
-        <div class="map-shell"><div id="map" aria-label="全球活躍熱帶氣旋地圖"></div><div class="map-caption"><span class="signal"></span> GLOBAL OVERVIEW <span class="muted">/ 全球視野</span></div><button id="reset-map" class="map-reset">⌖ 全球範圍</button><div class="map-legend"><span><i class="dot mint"></i>訓練海盆</span><span><i class="dot amber"></i>跨域實驗</span><span><i class="dot gray"></i>資料過期</span></div></div>
-        <div class="map-bottom"><div><span class="eyebrow">01 / SELECT</span><strong>在地圖或清單中選取氣旋</strong><p>查看氣旋中心附近的校準紅外線亮溫</p></div><span class="map-bottom-icon">↗</span></div>
-      </div>
-      <aside class="analysis-panel" aria-label="氣旋辨識面板">
-        <div id="empty-selection" class="empty-selection"><span class="empty-orbit">◎</span><span class="eyebrow">A CLOSER LOOK</span><h2>選取一個氣旋</h2><p>從全球視野，聚焦風暴。<br>選取系統後查看最近一次每小時 IR 與辨識結果。</p></div>
-        <div id="selection" hidden>
-          <div class="analysis-heading"><div><span id="selected-basin" class="eyebrow"></span><h2 id="selected-name"></h2></div><span id="selected-id" class="id-badge"></span></div>
-          <div id="domain-tag" class="domain-tag"></div>
-          <div class="storm-facts"><span id="selected-position"></span><span id="selected-wind"></span></div>
-          <p id="position-time" class="position-time"></p>
-          <div class="image-heading"><h3>紅外線亮溫</h3><span id="channel-label">11.2 µm</span></div>
-          <div class="ir-frame"><img id="ir-image" alt="以氣旋中心裁切、156×156 格點的紅外線亮溫" hidden><div id="image-crosshair" class="crosshair" hidden></div><span class="north-arrow">N ↑</span><span class="image-scale">1,248 km</span><div id="image-state" class="image-state" role="status"><span class="loader"></span><p>載入批次 IR 影像…</p><small>每小時自動產出，不需即時等待模型推論</small></div></div>
-          <div class="color-scale"><span>170 K</span><div></div><span>310 K</span></div>
-          <p id="image-meta" class="image-meta">等待批次觀測</p>
-          <p id="prediction-status" class="image-meta" role="status"></p>
-          <button id="infer" class="primary-button" disabled><span>✧</span> 查看 R34 辨識結果 <span>→</span></button>
-          <button id="retry-image" class="secondary-button" hidden>重新讀取批次結果</button>
-          <div id="result" class="result" hidden aria-live="polite"><div class="result-heading"><span class="eyebrow">ESTIMATED MEAN RADIUS</span><button id="download-result" title="下載辨識 CSV">CSV ↓</button></div><div class="radius-value"><strong id="mean-value"></strong><span>n mi</span><small id="mean-km"></small></div><div class="chart-title"><h3>R34 機率分布</h3><span>59 bins · Softmax</span></div><div id="chart"></div><p class="chart-note"><i></i> 模型預測 <span>┊ mean</span> <span>無 Ground Truth</span></p><p id="result-time" class="image-meta"></p></div>
-          <p class="analysis-note">R34 為 34 kt 風圈半徑；此模型輸出單一半徑分布，不代表四象限風圈或官方預報。</p>
-        </div>
-      </aside>
+
+    <section id="view-tutorial" class="page-view reading-view" aria-labelledby="tutorial-title" hidden>
+      <div class="reading-header"><p class="section-label">Using the monitor</p><h1 id="tutorial-title">A quick guide.</h1><p>Select a storm, explore its infrared image, and estimate its wind radius.</p></div>
+      <div class="reading-layout"><nav class="contents" aria-label="Tutorial contents"><a href="#tutorial-start">Getting started</a><a href="#tutorial-r34">What is R34?</a><a href="#tutorial-results">Reading the results</a><a href="#tutorial-updates">Updates &amp; availability</a></nav><div class="reading-body">
+        <section id="tutorial-start"><h2>Getting started</h2><ol class="guide-steps"><li><strong>Select a storm.</strong><p>Use the map or the active-storm list. The basin filter narrows the list and map to a region.</p></li><li><strong>Inspect the infrared image.</strong><p>The image is centered on the storm. Colder cloud tops appear in the lighter blue and pink colors.</p></li><li><strong>Press Infer R34 Using Our Model.</strong><p>The brief animation prepares and reveals the latest hourly model output. It does not start a new cloud inference job.</p></li></ol></section>
+        <section id="tutorial-r34"><h2>What is R34?</h2><p><strong>R34 is the radius of 34-knot winds</strong> around a tropical cyclone. A knot is one nautical mile per hour; 34 kt is about 63 km/h.</p><p>The estimate is a distance, shown in <strong>nautical miles (n mi)</strong>. One nautical mile equals 1.852 km. This model returns a single radius distribution, rather than four separate quadrant radii.</p></section>
+        <section id="tutorial-results"><h2>Reading the results</h2><p>The curve assigns a probability to each of 59 radius bins, from 10 to 300 n mi. The large number is the <strong>mean radius</strong>, calculated from that distribution. The dashed line marks this mean. After inference, the outlined circle on the infrared image shows the mean radius at the image-time crop center. It is a circular model estimate, not an observed wind boundary or four-quadrant wind analysis.</p><p>A wider curve means the model spreads probability over more radii; it is not a calibrated confidence interval. No ground-truth curve or live error score is available for these cases.</p><p>Use <strong>CSV ↓</strong> to download the distribution and its observation, center-position and model metadata.</p></section>
+        <section id="tutorial-updates"><h2>Updates &amp; availability</h2><p>New predictions are scheduled hourly. The page checks for newly published results every five minutes. Scheduled jobs and satellite feeds can be delayed.</p><p>A stale-data warning means the latest observation or batch is more than two hours old. If a new estimate fails, the last successful result may remain available for up to six hours and is labeled accordingly.</p><p>The automatic satellite feed currently covers GOES and Himawari viewing regions. Some Indian Ocean systems do not have a supported infrared image.</p><p><strong>Atlantic training, global exploration.</strong> Predictions outside the Atlantic are experimental and have not been validated for operational use.</p><a class="inline-link" href="#research">Read about the data and model →</a></section>
+      </div></div>
     </section>
-    <section class="method-strip" aria-label="辨識流程"><div><span>01</span><p><strong>原始亮溫</strong><small>GOES ABI / Himawari AHI · 11.2 µm</small></p></div><div><span>02</span><p><strong>以氣旋中心對中</strong><small>1,248 × 1,248 km → 156 × 156</small></p></div><div><span>03</span><p><strong>機率與期望半徑</strong><small>59 個 bin · 10–300 n mi · mean</small></p></div></section>
+
+    <section id="view-research" class="page-view reading-view" aria-labelledby="research-title" hidden>
+      <div class="reading-header"><p class="section-label">Research notes</p><h1 id="research-title">Behind the estimate.</h1><p>Satellite-based estimation of tropical cyclone wind radius.<br><span class="draft-note">Manuscript in preparation.</span></p></div>
+      <div class="reading-layout"><nav class="contents" aria-label="Research contents"><a href="#research-introduction">Introduction</a><a href="#research-literature">Literature Review</a><a href="#research-related">Past Similar Work</a><a href="#research-data">Data</a><a href="#research-model">Model Structure</a><a href="#research-performance">Performance</a><a href="#research-record">Observation Record</a></nav><div class="reading-body">
+        <section id="research-introduction"><h2>Introduction</h2><p>This project explores estimating the radius of 34-knot winds from storm-centered infrared satellite observations using label distribution learning.</p><p class="placeholder">The full research introduction will be added here.</p></section>
+        <section id="research-literature"><h2>Literature Review</h2><p class="placeholder">References and a critical review of the literature will be added here.</p></section>
+        <section id="research-related"><h2>Past Similar Work</h2><p class="placeholder">Comparisons with related wind-radius estimation methods will be added here.</p></section>
+        <section id="research-data"><h2>Data</h2><p>The model is trained primarily on North Atlantic cases. Its training inputs use GridSat-B1 infrared brightness temperatures on 156 × 156 grids.</p><dl class="spec-list"><div><dt>Operational imagery</dt><dd>GOES ABI C14 and Himawari AHI B14, both near 11.2 µm</dd></div><div><dt>Input window</dt><dd>1,248 × 1,248 km, resampled to 156 × 156 pixels at 8 km spacing</dd></div><div><dt>Normalization</dt><dd><code>(Kelvin − 236.54854) / 26.703743</code></dd></div></dl><p>Operational crops use a local WGS84 azimuthal equidistant projection. The exact GridSat training-grid geometry and resampling assumptions still require confirmation.</p><details><summary>Center alignment and quality checks</summary><p>Official positions and motion vectors are drawn from NHC/CPHC, JTWC warning positions and NCEP TCVitals. Positions are interpolated between nearby analyses, or extrapolated toward the image timestamp for at most six hours. Estimated centers are not new observed fixes.</p><p>The image timestamp represents the full-disk scan start or nominal time, not the precise acquisition time of every pixel. New inference requires imagery within 90 minutes and a usable center estimate. More than 2% missing image data is rejected; smaller gaps are filled with 245 K.</p></details></section>
+        <section id="research-model"><h2>Model Structure</h2><p>The current checkpoint uses <code>HurricaneAlexNet_ReferenceDNN</code>. The model produces 59 logits; Softmax converts them to a discrete radius distribution.</p><div class="model-flow" aria-label="Model: infrared input, convolutional features, fully connected layers, 59-bin output"><span>IR input<small>1 × 156 × 156</small></span><b aria-hidden="true">→</b><span>Conv features<small>64 → 192 → 384 → 256 → 256</small></span><b aria-hidden="true">→</b><span>LDL head<small>4,096 → 4,096 → 59</small></span></div><p>The mean is computed as <code>Σ probability × bin radius</code>. The current architecture and normalization follow the supplied training notebook.</p><p class="placeholder">Training objectives, ablation studies and methodological details will be added here.</p></section>
+        <section id="research-performance"><h2>Performance</h2><p class="placeholder">Evaluation protocol, validation figures, basin comparisons and quantitative results will be added here.</p><p>The checkpoint filename is not a verified live accuracy score. This monitor has no ground truth for current cases, and cross-basin accuracy has not yet been established.</p></section>
+        <section id="research-record"><h2>Observation Record</h2><p id="record-empty">Select a storm on the Global Monitor to inspect the record behind its latest estimate.</p><div id="record-content" hidden><p id="record-name" class="record-name"></p><dl id="record-fields" class="spec-list"></dl><p id="record-warning" class="result-warning" hidden></p></div></section>
+      </div></div>
+    </section>
   </main>
-  <footer><span><b>R34</b> OBSERVATORY <span class="muted">/ 研究用熱帶氣旋觀測台</span></span><span>定位：<a href="https://www.tropicaltidbits.com/storminfo/" target="_blank" rel="noreferrer">Tropical Tidbits</a> / <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">NOAA NHC</a> · 衛星：NOAA / JMA</span></footer>
-  <dialog id="about-dialog"><div class="dialog-heading"><span class="eyebrow">ABOUT THE MODEL</span><button id="close-about" aria-label="關閉說明">×</button></div><h2>從研究模型到每小時觀測</h2><p>目前使用 TCR34_reference_DNN_test1_25MAE.pth 的 HurricaneAlexNet_ReferenceDNN 權重，模型與訓練流程均未變更。檔名不代表此平台已驗證即時 MAE。</p><h3>每小時更新方式</h3><p>網站讀取每小時批次產出的 IR 與辨識結果；點選氣旋不會重新執行模型。畫面每 5 分鐘檢查新結果。GitHub 排程可能延遲，請以影像、定位、推論與批次時間為準。超過 2 小時未更新會顯示過期警示；單一系統失敗時，最多保留影像 6 小時內且使用相同模型的上次成功結果，並明確標示。</p><h3>適用範圍</h3><p>訓練資料主要來自北大西洋。跨海盆與跨衛星輸入可能產生分布偏移；目前未經全球作業驗證，不能視為官方風圈估計。</p><h3>亮溫與前處理</h3><p>GOES-19／18 使用 ABI C14；Himawari-9 使用 AHI B14，皆為 11.2 µm。讀取原始資料並轉為 Kelvin，網站顯色只供查看，不送入模型。</p><p>採 WGS84 局地等距方位投影，以氣旋中心裁切 1,248 km 正方形，重採樣為 156×156；GOES 採雙線性、Himawari 採最近鄰。這是依約 8 km／pixel 設定的作業假設，需再核對原始 GridSat 訓練資料的實際經緯網格與重採樣方式。</p><code>normalized = (Kelvin − 236.54854) / 26.703743</code><p>缺值低於 2% 時以 245 K 補值；超過 2% 停止辨識。執行推論時，影像超過 90 分鐘、定位超過 12 小時、或兩者相差超過 6 小時也會停止產生新辨識。既有批次結果仍可作為歷史資料查看。以 NHC/CPHC 與 JTWC 可用的近期官方定位、移動方向與速度補充清單；全球歷史定位備援來自 NOAA NCEP TCVitals。若影像時刻介於兩筆分析定位之間，做 WGS84 測地線內插；若晚於最新定位，使用移動向量或最近兩筆定位的速度外推，最多 6 小時。畫面與 CSV 區分來源定位、估計中心與影像時間，估計中心不是新觀測。無可靠移動資訊時停止新辨識。對齊使用全圓盤影像的標示掃描起始時刻，不代表每個像素同時觀測。</p><h3>覆蓋與延遲</h3><p>全球定位可顯示所有來源中的活躍系統。原始 11.2 µm 自動擷取目前涵蓋 GOES 與 Himawari 可視範圍。印度洋部分區域需另接 Meteosat；公開 CPC IR 約延遲兩天，因此本版不以它冒充即時資料。沒有可用原始資料時會顯示原因。</p><h3>如何閱讀輸出</h3><p>59 個 bin 中心為 10, 15, …, 300 海浬。Softmax 得到機率後，以 Σ pᵢ × rᵢ 計算 mean。即時案例不顯示 Ground Truth 或誤差；機率分布也不等於已校準的信賴區間。</p><div class="source-links"><a href="https://registry.opendata.aws/noaa-goes/" target="_blank" rel="noreferrer">NOAA GOES 原始資料 ↗</a><a href="https://registry.opendata.aws/noaa-himawari/" target="_blank" rel="noreferrer">JMA Himawari 原始資料 ↗</a></div></dialog>
+
+  <footer class="site-footer">
+    <div class="team-row">
+      <div class="person"><img class="portrait" src="assets/Albert.jpg" alt="Albert (Chun-Po) Chang" width="72" height="72"><div><p class="person-role">Student · Project lead</p><h2>Albert (Chun-Po) Chang</h2><p>Research Assistant under Prof. Shu-Chih Yang</p><a href="mailto:albert930825@gmail.com">albert930825@gmail.com</a></div></div>
+      <div class="person"><span class="portrait portrait-placeholder" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="17" r="7"/><path d="M10 40c0-9 5-14 14-14s14 5 14 14"/></svg></span><div><p class="person-role">Advisor</p><h2>Shu-Chih Yang</h2><p>Data assimilation and meso-scale predictability Lab</p><a href="mailto:shuchih.yang@gmail.com">shuchih.yang@gmail.com</a></div></div>
+      <div class="affiliation-logos"><a href="https://www.ncu.edu.tw/" target="_blank" rel="noreferrer" aria-label="National Central University"><img src="assets/NCULogo.svg" alt="National Central University emblem" width="90" height="77"></a><a href="https://www.atm.ncu.edu.tw/" target="_blank" rel="noreferrer" aria-label="Department of Atmospheric Sciences, National Central University"><img src="assets/logo_NCU_ATM.png" alt="NCU Department of Atmospheric Sciences emblem" width="78" height="78"></a></div>
+    </div>
+    <div class="footer-bottom"><span>R34 · National Central University · Department of Atmospheric Science</span><span>Position data: <a href="https://www.tropicaltidbits.com/storminfo/" target="_blank" rel="noreferrer">Tropical Tidbits / ATCF</a>, <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">NHC/CPHC</a>, <a href="https://www.metoc.navy.mil/jtwc/" target="_blank" rel="noreferrer">JTWC</a>, <a href="https://www.emc.ncep.noaa.gov/emc/pages/infrastructure/obs-data/tcvitals_description.php" target="_blank" rel="noreferrer">NCEP</a><br>Satellite data: <a href="https://registry.opendata.aws/noaa-goes/" target="_blank" rel="noreferrer">NOAA GOES</a> / <a href="https://registry.opendata.aws/noaa-himawari/" target="_blank" rel="noreferrer">JMA Himawari</a></span></div>
+  </footer>
 </body>
 </html>

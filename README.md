@@ -43,7 +43,7 @@ python -m venv .venv
 4. 預設從 `https://github.com/popo825/TC_Radius_of_34knot_wind_Inference/releases/download/model-v1/TCR34_reference_DNN_test1_25MAE.pth` 下載模型，SHA-256 必須符合 `3bca4f0a6007678298203692c29c17181753632e7fec2132105b1a7939a5a410`。模型下載失敗或雜湊不符時不發布新網站。
 5. 成功後，GitHub Pages 會顯示本批次的全球系統、IR 與推論結果。網站每 5 分鐘檢查新批次；訪客按「查看 R34 辨識結果」只顯示已完成的推論，不啟動新運算。
 
-排程為 `17 * * * *`，即每小時第 17 分鐘啟動（UTC 與台灣時間在每小時的分鐘數相同）。這是**啟動時間**，不是影像的觀測時間或結果完成時間。工作在 GitHub 的標準 Ubuntu runner 上執行；你的電腦可以關機。
+排程為 `37 * * * *`，即每小時第 37 分鐘啟動（UTC 與台灣時間在每小時的分鐘數相同）。這是**啟動時間**，不是影像的觀測時間或結果完成時間。工作在 GitHub 的標準 Ubuntu runner 上執行；你的電腦可以關機。確認自動更新時，請在 Actions 查看觸發事件為 `schedule` 的紀錄；`push` 或手動成功不代表排程已驗證。
 
 更換模型下載位置可在 **Settings → Secrets and variables → Actions → Variables** 設定 `R34_MODEL_URL` 與 `R34_MODEL_SHA256`。只有相同架構／bins 的新權重可直接更換；請同步更新實際 SHA-256。不要把權重加入一般 Git 提交，它仍被 `.gitignore` 排除。Release 資產與普通 Git 檔案是不同的儲存方式。
 
@@ -141,6 +141,8 @@ python -m http.server 8000 --bind 127.0.0.1 --directory dist
 
 `dist/data/latest.json` 包含當批系統及完整結果；`dist/data/products/` 包含每個系統的 PNG、JSON、CSV。`dist`、`.models` 與原始資料快取不加入 Git。`start.ps1 -SkipUpdate -Port 8001` 可直接預覽已存在的批次。
 
+`-SkipUpdate` 不抓新衛星資料；本機靜態伺服器也不會執行 GitHub 的每小時排程。要重新抓取與推論，先執行 `python -m backend.batch --output dist`，再重新整理本機頁面。GitHub Pages 的新資料則由 Actions 建立並部署，不需要把本機 `dist` 提交。
+
 保留的 FastAPI 可用 `python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000` 啟動並從 `/docs` 使用；其首頁提供靜態前端原始檔，沒有建立批次時只顯示等待狀態。原有 Dockerfile 提供這個研究 API，GitHub Actions 的每小時方案不使用 Dockerfile。
 
 ## 參考政策
@@ -151,6 +153,10 @@ python -m http.server 8000 --bind 127.0.0.1 --directory dist
 - [Release 資產容量](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 
 ## 資料與第三方元件
+
+介面使用英文，分成 Global Monitor、Tutorial、Research 三頁。主頁保留地圖、IR 與 R34 分布；資料時間、中心估計、衛星來源與 checkpoint 資訊移至 Research 的 Observation Record。Research 的論文章節先保留草稿位置，不填入未驗證的成效。
+
+Infer R34 的掃描動畫載入既有每小時批次結果，不會觸發新的雲端推論。地圖使用白色旋轉氣旋圖示，南半球反向旋轉；減少動態效果的系統設定會停用動畫。頁尾照片及校徽放在 `frontend/assets/`，來源記於 `credits.txt`；原始 `picture/` 不需要一併提交。
 
 - [NOAA GOES Open Data](https://registry.opendata.aws/noaa-goes/)、[JMA Himawari Open Data](https://registry.opendata.aws/noaa-himawari/)
 - [Tropical Tidbits 氣旋位置摘要](https://www.tropicaltidbits.com/storminfo/)、[NOAA NHC current storms](https://www.nhc.noaa.gov/CurrentStorms.json)。只解析定位摘要，不使用其彩色 IR 當模型輸入；若未來大量公開提供服務，需再確認其使用規範。

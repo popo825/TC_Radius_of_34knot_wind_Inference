@@ -1,0 +1,4 @@
+Albert.jpg: supplied by Albert (Chun-Po) Chang. Circular display uses CSS; original image is preserved.
+logo_NCU_ATM.png: supplied by the project owner.
+NCULogo.svg: National Central University emblem, Chen Tze-Fu. Source: https://commons.wikimedia.org/wiki/File:NCULogo.svg ; original https://upload.wikimedia.org/wikipedia/commons/3/3a/NCULogo.svg . The source describes the emblem as public domain.
+cyclone.svg: original SVG drawn for this project.

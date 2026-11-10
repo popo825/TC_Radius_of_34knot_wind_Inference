@@ -1,0 +1,13 @@
+# Python 3.12; CPU works. Install torch from the CPU index if no GPU is needed.
+torch>=2.5,<3
+numpy>=2.0,<2.3
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+requests>=2.32,<3
+scipy>=1.14,<2
+netCDF4>=1.7,<2
+pyproj>=3.7,<4
+Pillow>=11,<14
+satpy>=0.55,<0.61
+h5netcdf>=1.6,<2
+h5py>=3.12,<4

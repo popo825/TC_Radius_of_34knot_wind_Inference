@@ -1,0 +1,14 @@
+.venv/
+.runtime/
+.cache/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pth
+*.pt
+*.ipynb
+.env
+.env.*
+!.env.example
+artifacts/
+*.log

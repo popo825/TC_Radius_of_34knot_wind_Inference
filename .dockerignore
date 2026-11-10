@@ -1,0 +1,8 @@
+.runtime
+.venv
+.cache
+.git
+*.pth
+*.ipynb
+artifacts
+__pycache__

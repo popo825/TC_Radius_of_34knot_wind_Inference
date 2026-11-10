@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a1520">
+  <meta name="description" content="熱帶氣旋 R34 實驗性即時辨識平台。衛星紅外線亮溫、59-bin 機率分布與風圈半徑估計。">
+  <title>R34 Observatory · 熱帶氣旋觀測台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect rx='10' width='40' height='40' fill='%230b1824'/%3E%3Ccircle cx='20' cy='20' r='12' fill='none' stroke='%237de1c3' stroke-width='4'/%3E%3Ccircle cx='20' cy='20' r='4' fill='%237de1c3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/leaflet.css"><link rel="stylesheet" href="styles.css">
+  <script defer src="vendor/leaflet.js"></script><script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="R34 Observatory 首頁"><span class="brand-symbol">◎</span><strong>R34<span>OBSERVATORY</span></strong></a>
+    <nav aria-label="主要導覽"><a class="active" href="#overview">全球監測</a><button id="about-button">模型與資料</button></nav>
+    <div class="header-meta"><span class="experimental">EXPERIMENTAL</span><time id="clock"></time></div>
+  </header>
+  <main id="overview">
+    <section class="intro">
+      <div><div class="eyebrow"><span class="signal"></span> TROPICAL CYCLONE INTELLIGENCE</div><h1>從雲系，看見風圈。</h1><p>全球熱帶氣旋監測 · 11.2 µm 紅外線 · R34 機率辨識</p></div>
+      <div class="intro-aside"><span>34 kt</span><p>熱帶風暴風速門檻<br><b>風圈半徑估計 / 海浬</b></p></div>
+    </section>
+    <div class="notice"><span class="notice-icon">i</span><p><strong>研究展示版本</strong>　模型主要以<strong>北大西洋</strong>資料訓練；其他海盆為跨域實驗，尚未驗證準確度。結果供研究參考。</p><button id="notice-about" aria-label="查看模型說明">了解模型 ↗</button></div>
+    <div id="feed-warning" class="feed-warning" hidden role="status"></div>
+    <section class="workspace" aria-label="全球氣旋監測工作區">
+      <aside class="storm-sidebar">
+        <div class="section-heading"><div><span class="eyebrow">ACTIVE SYSTEMS</span><h2>活躍系統 <span id="storm-count" class="count">—</span></h2></div><button id="refresh" class="icon-button" title="更新氣旋清單" aria-label="更新氣旋清單">↻</button></div>
+        <label class="filter-label" for="basin-filter">監測海盆</label><select id="basin-filter"><option value="all">全部海盆</option><option value="L">北大西洋</option><option value="W">西北太平洋</option><option value="EC">東／中太平洋</option><option value="ABSP">印度洋／南半球</option></select>
+        <div id="storm-list" aria-live="polite"><div class="list-message">正在連線全球氣旋資料…</div></div>
+        <div class="sidebar-footer"><span class="signal"></span><span id="feed-status">等待資料來源</span><small id="feed-time">每 5 分鐘更新清單</small></div>
+      </aside>
+      <div class="map-column">
+        <div class="map-shell"><div id="map" aria-label="全球活躍熱帶氣旋地圖"></div><div class="map-caption"><span class="signal"></span> GLOBAL OVERVIEW <span class="muted">/ 全球視野</span></div><button id="reset-map" class="map-reset">⌖ 全球範圍</button><div class="map-legend"><span><i class="dot mint"></i>訓練海盆</span><span><i class="dot amber"></i>跨域實驗</span><span><i class="dot gray"></i>資料過期</span></div></div>
+        <div class="map-bottom"><div><span class="eyebrow">01 / SELECT</span><strong>在地圖或清單中選取氣旋</strong><p>查看氣旋中心附近的校準紅外線亮溫</p></div><span class="map-bottom-icon">↗</span></div>
+      </div>
+      <aside class="analysis-panel" aria-label="氣旋辨識面板">
+        <div id="empty-selection" class="empty-selection"><span class="empty-orbit">◎</span><span class="eyebrow">A CLOSER LOOK</span><h2>選取一個氣旋</h2><p>從全球視野，聚焦風暴。<br>選取系統後即可載入原始 IR 影像。</p></div>
+        <div id="selection" hidden>
+          <div class="analysis-heading"><div><span id="selected-basin" class="eyebrow"></span><h2 id="selected-name"></h2></div><span id="selected-id" class="id-badge"></span></div>
+          <div id="domain-tag" class="domain-tag"></div>
+          <div class="storm-facts"><span id="selected-position"></span><span id="selected-wind"></span></div>
+          <p id="position-time" class="position-time"></p>
+          <div class="image-heading"><h3>紅外線亮溫</h3><span id="channel-label">11.2 µm</span></div>
+          <div class="ir-frame"><img id="ir-image" alt="以氣旋中心裁切、156×156 格點的紅外線亮溫" hidden><div id="image-crosshair" class="crosshair" hidden></div><span class="north-arrow">N ↑</span><span class="image-scale">1,248 km</span><div id="image-state" class="image-state" role="status"><span class="loader"></span><p>擷取衛星原始資料…</p><small>首次下載與校準約需 20–90 秒</small></div></div>
+          <div class="color-scale"><span>170 K</span><div></div><span>310 K</span></div>
+          <p id="image-meta" class="image-meta">等待衛星觀測</p>
+          <button id="infer" class="primary-button" disabled><span>✧</span> 開始 R34 辨識 <span>→</span></button>
+          <button id="retry-image" class="secondary-button" hidden>重新擷取影像</button>
+          <div id="result" class="result" hidden aria-live="polite"><div class="result-heading"><span class="eyebrow">ESTIMATED MEAN RADIUS</span><button id="download-result" title="下載辨識 CSV">CSV ↓</button></div><div class="radius-value"><strong id="mean-value"></strong><span>n mi</span><small id="mean-km"></small></div><div class="chart-title"><h3>R34 機率分布</h3><span>59 bins · Softmax</span></div><div id="chart"></div><p class="chart-note"><i></i> 模型預測 <span>┊ mean</span> <span>無即時 Ground Truth</span></p><p id="result-time" class="image-meta"></p></div>
+          <p class="analysis-note">R34 為 34 kt 風圈半徑；此模型輸出單一半徑分布，不代表四象限風圈或官方預報。</p>
+        </div>
+      </aside>
+    </section>
+    <section class="method-strip" aria-label="辨識流程"><div><span>01</span><p><strong>原始亮溫</strong><small>GOES ABI / Himawari AHI · 11.2 µm</small></p></div><div><span>02</span><p><strong>以氣旋中心對中</strong><small>1,248 × 1,248 km → 156 × 156</small></p></div><div><span>03</span><p><strong>機率與期望半徑</strong><small>59 個 bin · 10–300 n mi · mean</small></p></div></section>
+  </main>
+  <footer><span><b>R34</b> OBSERVATORY <span class="muted">/ 研究用熱帶氣旋觀測台</span></span><span>定位：<a href="https://www.tropicaltidbits.com/storminfo/" target="_blank" rel="noreferrer">Tropical Tidbits</a> / <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">NOAA NHC</a> · 衛星：NOAA / JMA</span></footer>
+  <dialog id="about-dialog"><div class="dialog-heading"><span class="eyebrow">ABOUT THE MODEL</span><button id="close-about" aria-label="關閉說明">×</button></div><h2>從研究模型到即時觀測</h2><p>目前使用 TCR34_reference_DNN_test1_25MAE.pth 的 HurricaneAlexNet_ReferenceDNN 權重，模型與訓練流程均未變更。檔名不代表此平台已驗證即時 MAE。</p><h3>適用範圍</h3><p>訓練資料主要來自北大西洋。跨海盆與跨衛星輸入可能產生分布偏移；目前未經全球作業驗證，不能視為官方風圈估計。</p><h3>亮溫與前處理</h3><p>GOES-19／18 使用 ABI C14；Himawari-9 使用 AHI B14，皆為 11.2 µm。讀取原始資料並轉為 Kelvin，網站顯色只供查看，不送入模型。</p><p>採 WGS84 局地等距方位投影，以氣旋中心裁切 1,248 km 正方形，重採樣為 156×156；GOES 採雙線性、Himawari 採最近鄰。這是依約 8 km／pixel 設定的作業假設，需再核對原始 GridSat 訓練資料的實際經緯網格與重採樣方式。</p><code>normalized = (Kelvin − 236.54854) / 26.703743</code><p>缺值低於 2% 時以 245 K 補值；超過 2% 停止辨識。影像超過 90 分鐘、定位超過 12 小時、或兩者相差超過 6 小時也會停止辨識。定位時間與影像時間會分別列出，不推估移動後的中心。</p><h3>覆蓋與延遲</h3><p>全球定位可顯示所有來源中的活躍系統。原始 11.2 µm 自動擷取目前涵蓋 GOES 與 Himawari 可視範圍。印度洋部分區域需另接 Meteosat；公開 CPC IR 約延遲兩天，因此本版不以它冒充即時資料。沒有可用原始資料時會顯示原因。</p><h3>如何閱讀輸出</h3><p>59 個 bin 中心為 10, 15, …, 300 海浬。Softmax 得到機率後，以 Σ pᵢ × rᵢ 計算 mean。即時案例不顯示 Ground Truth 或誤差；機率分布也不等於已校準的信賴區間。</p><div class="source-links"><a href="https://registry.opendata.aws/noaa-goes/" target="_blank" rel="noreferrer">NOAA GOES 原始資料 ↗</a><a href="https://registry.opendata.aws/noaa-himawari/" target="_blank" rel="noreferrer">JMA Himawari 原始資料 ↗</a></div></dialog>
+</body>
+</html>

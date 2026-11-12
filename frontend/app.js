@@ -25,17 +25,18 @@ function availabilityReason(record){
   return 'No estimate is available in the latest update.';
 }
 function setPage(page){
-  state.page=['monitor','tutorial','research'].includes(page)?page:'monitor';
-  for(const name of ['monitor','tutorial','research'])$('view-'+name).hidden=name!==state.page;
+  state.page=['monitor','past','tutorial','research'].includes(page)?page:'monitor';
+  for(const name of ['monitor','past','tutorial','research'])$('view-'+name).hidden=name!==state.page;
   document.querySelectorAll('[data-page]').forEach(link=>{
     if(link.dataset.page===state.page)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   });
-  document.title='R34 · '+({monitor:'Global Monitor',tutorial:'Tutorial',research:'Research'}[state.page]);
+  document.title='R34 · '+({monitor:'Global Monitor',past:'Past Storm',tutorial:'Tutorial',research:'Research'}[state.page]);
   if(state.page==='monitor' && map)map.invalidateSize();
+  if(state.page==='past')window.R34Past?.open();
 }
 function route(){
   const hash=(window.location?.hash||'#monitor').slice(1);
-  const page=hash.startsWith('tutorial')?'tutorial':hash.startsWith('research')?'research':'monitor';
+  const page=hash==='past'?'past':hash.startsWith('tutorial')?'tutorial':hash.startsWith('research')?'research':'monitor';
   setPage(page);if(hash!==page)$(hash)?.scrollIntoView?.({block:'start'});
 }
 function initMap(){
@@ -116,7 +117,7 @@ function imageError(message){
   clearRadius();
   state.result=null;state.presenting=false;$('analysis-animation').hidden=true;
   $('image-state').hidden=false;$('image-state').classList.add('error');$('image-state').innerHTML=`<span class="loader" aria-hidden="true"></span><p>${esc(message)}</p>`;
-  $('ir-image').hidden=true;$('image-crosshair').hidden=true;$('infer').disabled=true;$('infer').setAttribute('aria-busy','false');$('retry-image').hidden=false;
+  $('ir-image').hidden=true;$('image-crosshair').hidden=true;$('infer').disabled=true;$('infer').setAttribute('aria-busy','false');
 }
 function selectStorm(id,focus=true){
   const storm=state.storms.find(s=>s.id===id);if(!storm)return;
@@ -126,7 +127,7 @@ function selectStorm(id,focus=true){
   $('selected-name').textContent=shortName(storm);$('selected-id').textContent=storm.id;$('selected-basin').textContent=basinName(storm);
   $('selected-position').textContent=position(storm);$('selected-wind').textContent=`${storm.wind_kt??'—'} kt`;
   $('infer').disabled=true;$('infer').setAttribute('aria-busy','false');$('infer').innerHTML='<span>Infer R34 Using Our Model</span><span aria-hidden="true">→</span>';
-  $('retry-image').hidden=true;$('ir-image').hidden=true;$('image-crosshair').hidden=true;$('image-state').hidden=false;$('image-state').classList.remove('error');
+  $('ir-image').hidden=true;$('image-crosshair').hidden=true;$('image-state').hidden=false;$('image-state').classList.remove('error');
   $('image-state').innerHTML='<span class="loader" aria-hidden="true"></span><p>Loading image…</p>';$('inference-status').textContent='';renderStorms();
   if(focus&&map)map.setView([storm.lat,storm.lon],3,{animate:false});
   const record=state.snapshot?.records[id];renderRecord();
@@ -171,7 +172,7 @@ function renderRecord(){
   $('record-warning').textContent=messages.join(' ');$('record-warning').hidden=!messages.length;
 }
 
-function renderChart(result) {
+function renderChart(result, target = $('chart')) {
   const W=340,H=210,pad={l:38,r:12,t:17,b:34},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
   const max=Math.max(...result.probabilities)*1.18;
   const x=v=>pad.l+(v-10)/290*cw,y=v=>pad.t+ch-v/max*ch;
@@ -187,7 +188,7 @@ function renderChart(result) {
   contents+=`<line x1="${mx}" y1="${pad.t-5}" x2="${mx}" y2="${y(0)}" stroke="#234e6d" stroke-dasharray="3 4"/><text x="${Math.min(W-32,Math.max(65,mx+5))}" y="10" fill="#234e6d" font-size="10">mean ${result.mean_nmi.toFixed(1)}</text>`;
   result.bins_nmi.forEach((b,i)=>contents+=`<circle cx="${x(b)}" cy="${y(result.probabilities[i])}" r="2" fill="#b94762"><title>${b} n mi：${(result.probabilities[i]*100).toFixed(3)}%</title></circle>`);
   contents+=`<text x="${W/2}" y="${H-2}" text-anchor="middle" fill="#607585" font-size="10">Wind radius (n mi)</text><text x="0" y="8" fill="#607585" font-size="10">Probability</text>`;
-  $('chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="R34 prediction distribution, mean ${result.mean_nmi.toFixed(1)} nautical miles"><title>R34 probability distribution</title>${contents}</svg>`;
+  target.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="R34 prediction distribution, mean ${result.mean_nmi.toFixed(1)} nautical miles"><title>R34 probability distribution</title>${contents}</svg>`;
 }
 function downloadResult() {
   const r=state.result;if(!r)return;
@@ -202,7 +203,6 @@ function downloadResult() {
 $('refresh').addEventListener('click',()=>refreshStorms(true));
 $('basin-filter').addEventListener('change',renderStorms);
 $('reset-map').addEventListener('click',resetMap);
-$('retry-image').addEventListener('click',()=>refreshStorms(true));
 $('infer').addEventListener('click',runInferenceAnimation);
 $('download-result').addEventListener('click',downloadResult);
 window.addEventListener?.('hashchange',route);

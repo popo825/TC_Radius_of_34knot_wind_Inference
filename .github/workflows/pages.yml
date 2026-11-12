@@ -1,10 +1,9 @@
 name: Hourly R34 inference and Pages
+run-name: R34 inference · ${{ github.event_name }} · run ${{ github.run_number }}
 
 on:
   push:
     branches: ["main"]
-  schedule:
-    - cron: "37 * * * *"
   workflow_dispatch:
   release:
     types: [published]
@@ -33,6 +32,15 @@ jobs:
       R34_MODEL_SHA256: ${{ vars.R34_MODEL_SHA256 || '3bca4f0a6007678298203692c29c17181753632e7fec2132105b1a7939a5a410' }}
 
     steps:
+      - name: Record workflow trigger
+        env:
+          TRIGGER_EVENT: ${{ github.event_name }}
+          TRIGGER_SCHEDULE: ${{ github.event.schedule }}
+          TRIGGER_REF: ${{ github.ref }}
+        run: |
+          printf 'Event: %s\nSchedule: %s\nRef: %s\n' "$TRIGGER_EVENT" "$TRIGGER_SCHEDULE" "$TRIGGER_REF" >> "$GITHUB_STEP_SUMMARY"
+          date -u '+Started: %Y-%m-%d %H:%M:%S UTC' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Checkout default branch
         uses: actions/checkout@v6
         with:

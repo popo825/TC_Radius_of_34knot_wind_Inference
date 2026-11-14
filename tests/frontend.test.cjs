@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const now='2026-11-10T08:00:00Z';
 function fixture() {
-  const storm={id:'31W',name:'Test',lat:24,lon:135,observed_at:now};
+  const storm={id:'31W',name:'Test',lat:24,lon:135,wind_kt:35,observed_at:now};
   return {schema_version:1,mode:'hourly',generation_id:'batch-1',generated_at:now,fetched_at:now,warnings:[],storms:[storm],records:{'31W':{
     status:'ready',image_url:'data/products/31W.png',result:{bins_nmi:Array.from({length:59},(_,i)=>10+i*5),probabilities:Array(59).fill(1/59),mean_nmi:155,
       model_sha256:'a'.repeat(64),inferred_at:now,metadata:{observed_at:now,position_at:now,center_lat:24,center_lon:135,

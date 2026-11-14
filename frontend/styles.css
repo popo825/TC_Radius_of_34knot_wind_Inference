@@ -6,3 +6,23 @@
 @media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}.analysis-animation .scan-line{display:none}}
 
 .header-status #live-clock{font-size:13px;font-weight:550;color:var(--ink);letter-spacing:.02em}@media(max-width:640px){.header-status #live-clock{font-size:10px}}
+
+
+.brand img { display: block; width: 104px; height: auto; }
+#view-monitor .page-heading { gap: 18px; }
+#view-monitor .threshold { flex-shrink: 0; }
+#monitor-title { text-wrap: balance; }
+.result-warnings { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.result-warnings li { display: flex; align-items: flex-start; gap: 7px; color: #704515; font-size: 13px; }
+.warning-symbol {
+  display: inline-grid; place-items: end center; flex: none; width: 18px; height: 17px;
+  background: #ffd268; color: #4f320a; clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  font: 800 12px/12px "Segoe UI", sans-serif;
+}
+.invalid-case-image { display: block; width: 100%; height: auto; }
+.case-guidance { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.case-guidance li { display: flex; align-items: baseline; gap: 10px; color: #435767; }
+@media (max-width: 640px) {
+  .brand img { width: 82px; }
+  #monitor-title { font-size: clamp(20px, 5.6vw, 30px); }
+}

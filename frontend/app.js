@@ -8,7 +8,20 @@ const shortName=s=>s.name.replace(/^(Tropical (Cyclone|Storm|Depression)|Hurrica
 const basinNames={L:'North Atlantic',E:'Eastern North Pacific',C:'Central North Pacific',W:'Western North Pacific',A:'Arabian Sea',B:'Bay of Bengal',S:'South Indian Ocean',P:'South Pacific'};
 const basinName=s=>basinNames[s.id.slice(-1)]||'Other basin';
 const methodNames={reported:'Reported position',interpolated_track:'Interpolated between analysis positions',extrapolated_motion:'Extrapolated using reported motion',extrapolated_history:'Extrapolated using recent track motion'};
-let map;
+const MIN_ACTIVE_WIND_KT = 35;
+const LAND_WARNING_KM = 150;
+let map, worldData;
+
+function loadWorld() {
+  worldData ??= fetch("data/world.geojson").then(response => {
+    if (!response.ok) throw new Error("Coastline data is unavailable.");
+    return response.json();
+  }).catch(error => {
+    worldData = undefined;
+    throw error;
+  });
+  return worldData;
+}
 function updateClock(){
   const now=new Date();
   $('live-clock').textContent=now.toISOString().replace('T',' ').slice(0,19)+' UTC';
@@ -30,7 +43,7 @@ function setPage(page){
   document.querySelectorAll('[data-page]').forEach(link=>{
     if(link.dataset.page===state.page)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   });
-  document.title='R34 · '+({monitor:'Global Monitor',past:'Past Storm',tutorial:'Tutorial',research:'Research'}[state.page]);
+  document.title='SD-TCR · '+({monitor:'Global Monitor',past:'Past Storm',tutorial:'Tutorial',research:'Research'}[state.page]);
   if(state.page==='monitor' && map)map.invalidateSize();
   if(state.page==='past')window.R34Past?.open();
 }
@@ -43,7 +56,7 @@ function initMap(){
   if(!window.L){$('map').textContent='The map is unavailable. Select a storm from the list.';return;}
   map=L.map('map',{zoomControl:true,attributionControl:true,minZoom:0,maxZoom:8,zoomSnap:.25,worldCopyJump:true});
   map.attributionControl.setPrefix('<a href="https://leafletjs.com/">Leaflet</a>');map.attributionControl.addAttribution('Natural Earth');
-  fetch('data/world.geojson').then(r=>r.json()).then(data=>{
+  loadWorld().then(data=>{
     for(const shift of [-360,0,360]){
       const shifted=JSON.parse(JSON.stringify(data));
       const move=coords=>typeof coords[0]==='number'?[coords[0]+shift,coords[1]]:coords.map(move);
@@ -71,7 +84,12 @@ function showRadius(){
 }
 function renderStorms(){
   const storms=filteredStorms();$('storm-count').textContent=storms.length;
-  $('storm-list').innerHTML=storms.length?storms.map(s=>`<button class="storm-card ${state.selected?.id===s.id?'selected':''}" data-storm="${esc(s.id)}" aria-pressed="${state.selected?.id===s.id}"><div class="storm-card-top"><span>${esc(s.id)}</span><span class="storm-card-wind">${s.wind_kt??'—'} kt</span></div><div class="storm-card-name">${esc(shortName(s))}</div><div class="storm-card-basin">${esc(basinName(s))}</div></button>`).join(''):'<p class="list-message">No active systems in this basin.</p>';
+  const noActive = state.snapshot?.status !== 'awaiting_first_run' && state.storms.length === 0;
+  $('select-storm-prompt').hidden = noActive;
+  $('no-active-prompt').hidden = !noActive;
+  $('storm-list').innerHTML=storms.length?storms.map(s=>`<button class="storm-card ${state.selected?.id===s.id?'selected':''}" data-storm="${esc(s.id)}" aria-pressed="${state.selected?.id===s.id}"><div class="storm-card-top"><span>${esc(s.id)}</span><span class="storm-card-wind">${s.wind_kt??'—'} kt</span></div><div class="storm-card-name">${esc(shortName(s))}</div><div class="storm-card-basin">${esc(basinName(s))}</div></button>`).join(''):noActive
+    ? '<p class="list-message">No active storms at or above 35 kt.</p>'
+    : '<p class="list-message">No active storms in this basin.</p>';
   $('storm-list').querySelectorAll('[data-storm]').forEach(button=>button.addEventListener('click',()=>selectStorm(button.dataset.storm)));
   if(!map)return;
   state.markers.forEach(m=>m.remove());state.markers=[];
@@ -97,7 +115,7 @@ async function refreshStorms(forceSelection=false){
     }else{
       if(age>2)warnings.push('Results have not updated for over two hours. Check observation times in Research.');
       if(age<-.1)warnings.push('Please check your device clock.');
-      state.storms=data.storms.map(s=>({...s,stale:age>2||R34Data.ageHours(s.observed_at)>12}));
+      state.storms=data.storms.filter(s=>Number.isFinite(s.wind_kt) && s.wind_kt >= MIN_ACTIVE_WIND_KT).map(s=>({...s,stale:age>2||R34Data.ageHours(s.observed_at)>12}));
     }
     $('feed-warning').hidden=!warnings.length;$('feed-warning').textContent=warnings.join(' ');
     if(state.selected){const updated=state.storms.find(s=>s.id===state.selected.id);if(!updated)clearSelection();else if(changed||forceSelection)selectStorm(updated.id,false);}
@@ -153,13 +171,38 @@ function showResult(){
   const result=state.result;if(!result)return;
   $('mean-value').textContent=result.mean_nmi.toFixed(1);$('mean-km').textContent='≈ '+(result.mean_nmi*1.852).toFixed(1)+' km';renderChart(result);$('result').hidden=false;
   const messages=[],storm=state.selected,record=state.snapshot.records[storm.id];
-  if(!storm.in_training_basin)messages.push(`${basinName(storm)} case: outside the model's Atlantic training basin.`);
+  if (storm.id.slice(-1) !== 'L') {
+    messages.push(`Reminder: This is a ${basinName(storm)} case, outside the model’s Atlantic training basin.`);
+  }
   if(record.status==='cached')messages.push('Showing the last successful estimate.');
   if(R34Data.ageHours(result.metadata.observed_at)>2||R34Data.ageHours(state.snapshot.generated_at)>2)messages.push('Observation or update is over two hours old.');
-  $('result-warning').textContent=messages.join(' ');$('result-warning').hidden=!messages.length;$('infer').innerHTML='<span>Infer R34 Using Our Model</span><span aria-hidden="true">↻</span>';
+  renderEstimateWarnings(messages);
+  addLandWarning(storm, messages);$('infer').innerHTML='<span>Infer R34 Using Our Model</span><span aria-hidden="true">↻</span>';
   showRadius();
   $('inference-status').textContent=`Estimated mean R34: ${result.mean_nmi.toFixed(1)} nautical miles.`;
 }
+function renderEstimateWarnings(messages) {
+  const list = $('result-warning');
+  list.innerHTML = messages.map(message =>
+    `<li><span class="warning-symbol" aria-hidden="true">!</span><span>${esc(message)}</span></li>`
+  ).join('');
+  list.hidden = messages.length === 0;
+}
+
+async function addLandWarning(storm, messages) {
+  if (!window.R34Coast) return;
+  const generation = state.generation;
+  try {
+    const land = await loadWorld();
+    const distance = window.R34Coast.distanceToLandKm(land, storm.lat, storm.lon);
+    if (generation !== state.generation || $('result').hidden || !(distance < LAND_WARNING_KM)) return;
+    renderEstimateWarnings([...messages,
+      'Too close to land: the storm center is within 150 km of land. The estimate may be unreliable.']);
+  } catch {
+    // The estimate remains usable when the coastline overlay is unavailable.
+  }
+}
+
 function safeSource(url,label){return typeof url==='string'&&url.startsWith('https://')?`<a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(label)} ↗</a>`:esc(label);}
 function renderRecord(){
   const storm=state.selected,record=storm&&state.snapshot?.records[storm.id];$('record-empty').hidden=!!storm;$('record-content').hidden=!storm;if(!storm)return;

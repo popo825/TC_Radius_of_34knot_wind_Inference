@@ -26,3 +26,33 @@
   .brand img { width: 82px; }
   #monitor-title { font-size: clamp(20px, 5.6vw, 30px); }
 }
+
+
+/* Research manuscript */
+.paper-header h1 { font-size: clamp(24px, 3.1vw, 48px); line-height: 1.17; }
+.paper-header h1 span { display: block; }
+.paper-body { min-width: 0; max-width: 880px; }
+.paper-body h3 { margin: 1.65em 0 .65em; font-size: 20px; }
+.paper-body h4 { margin: 1.45em 0 .55em; font-size: 16px; }
+.paper-body :is(p, h3, li, table)[id] { scroll-margin-top: 24px; }
+.paper-contents .paper-subnav { padding-left: 13px; border-left: 1px solid var(--line); }
+.research-cite, .paper-references a { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+.paper-equation {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: 12px; margin: 20px 0; color: var(--ink);
+}
+.paper-equation math { overflow-x: auto; padding: 8px 0; }
+.equation-number { color: var(--muted); font-size: 13px; }
+.paper-table-wrap { overflow-x: auto; margin: 24px 0; }
+.paper-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.paper-table caption { text-align: left; padding-bottom: 12px; color: var(--muted); }
+.paper-table :is(th, td) { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+.paper-table thead { background: #edf3f7; }
+.paper-references { padding: 0; margin: 0; list-style: none; }
+.paper-references li { padding: 9px 10px; overflow-wrap: anywhere; }
+.paper-references li:target { background: #e9f2f8; box-shadow: inset 3px 0 var(--blue); }
+@media (max-width: 640px) {
+  .paper-header h1 { font-size: clamp(23px, 5.4vw, 34px); }
+  .paper-header h1 span { display: inline; }
+  .paper-contents .paper-subnav { padding-left: 0; border-left: 0; }
+}

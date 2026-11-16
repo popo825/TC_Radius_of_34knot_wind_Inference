@@ -170,11 +170,10 @@ async function runInferenceAnimation(){
 function showResult(){
   const result=state.result;if(!result)return;
   $('mean-value').textContent=result.mean_nmi.toFixed(1);$('mean-km').textContent='≈ '+(result.mean_nmi*1.852).toFixed(1)+' km';renderChart(result);$('result').hidden=false;
-  const messages=[],storm=state.selected,record=state.snapshot.records[storm.id];
+  const messages=[],storm=state.selected;
   if (storm.id.slice(-1) !== 'L') {
     messages.push(`Reminder: This is a ${basinName(storm)} case, outside the model’s Atlantic training basin.`);
   }
-  if(record.status==='cached')messages.push('Showing the last successful estimate.');
   if(R34Data.ageHours(result.metadata.observed_at)>2||R34Data.ageHours(state.snapshot.generated_at)>2)messages.push('Observation or update is over two hours old.');
   renderEstimateWarnings(messages);
   addLandWarning(storm, messages);$('infer').innerHTML='<span>Infer R34 Using Our Model</span><span aria-hidden="true">↻</span>';

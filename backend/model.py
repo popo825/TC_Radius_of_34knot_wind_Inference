@@ -50,7 +50,7 @@ def load_model():
     return model, bins, digest
 
 
-def predict(kelvin):
+def predict(kelvin, *, center_lat=0.0):
     image = np.asarray(kelvin, dtype=np.float32)
     if image.shape != (156, 156):
         raise ValueError('Expected a storm-centered 156 × 156 Kelvin grid.')
@@ -60,10 +60,15 @@ def predict(kelvin):
     if not np.all((image[finite] >= 100) & (image[finite] <= 350)):
         raise ValueError('Brightness temperatures must be in Kelvin (100–350 K).')
     image = np.where(finite, image, 245.0)
+    # Reverse rows for Southern Hemisphere model inputs. Keep the source crop north-up.
+    flipped = center_lat < 0
+    if flipped:
+        image = image[::-1, :]
     normalized = (image - MEAN_K) / STD_K
     model, bins, digest = load_model()
     with torch.inference_mode():
         probability = torch.softmax(model(torch.from_numpy(normalized.copy())[None, None]), -1)[0].numpy()
     return {'bins_nmi': bins.tolist(), 'probabilities': probability.tolist(),
             'mean_nmi': float(np.dot(probability, bins)), 'model_sha256': digest,
+            'input_vertical_flip': flipped,
             'missing_fraction': float(1 - finite.mean()), 'ground_truth': None}

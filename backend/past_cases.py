@@ -153,7 +153,8 @@ def build_case(case, digest, workers):
     previous = json.loads(manifest.read_text(encoding='utf-8')) if manifest.exists() else {}
     if previous.get('model_sha256') == digest:
         old_frames = {f['time']: f for f in previous['frames']
-                      if 'mean_nmi' in f and (output / f['image']).is_file()}
+                      if 'mean_nmi' in f and (output / f['image']).is_file()
+                      and f.get('input_vertical_flip', False) is (f['lat'] < 0)}
     else:
         old_frames = {}
     frames = []
@@ -189,13 +190,13 @@ def build_case(case, digest, workers):
                         raise DataUnavailable('The storm crop has more than 2% missing temperatures.')
                     np.save(case_cache / f'{stamp}.npy', kelvin)
                     write_json(case_cache / f'{stamp}.json', meta)
-                result = predict(kelvin)
+                result = predict(kelvin, center_lat=lat)
                 image = f'{stamp}.png'
                 if file.suffix != '.npy' or not (output / image).exists():
                     (output / image).write_bytes(render_ir_png(kelvin))
                 frame.update(lat=lat, lon=lon, center_method=method, center_fixes=fixes,
                              observed_at=meta['observed_at'], source_url=meta['source_url'],
-                             satellite=meta['satellite'],
+                             satellite=meta['satellite'], input_vertical_flip=result['input_vertical_flip'],
                              image=image, mean_nmi=result['mean_nmi'], probabilities=result['probabilities'])
             except (DataUnavailable, requests.RequestException) as exc:
                 frame['unavailable'] = (str(exc) if isinstance(exc, DataUnavailable)

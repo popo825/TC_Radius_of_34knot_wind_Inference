@@ -69,6 +69,8 @@ def reuse_previous(sid, previous, site_url, digest, now):
                 or not 0 <= (now - image_time).total_seconds() <= 6 * 3600
                 or meta['storm']['id'] != sid):
             return None
+        if result.get('input_vertical_flip', False) is not (meta['center_lat'] < 0):
+            return None
         image_path = f'data/products/{sid}.png'
         if record['image_url'] != image_path:
             return None
@@ -115,7 +117,7 @@ def build_site(output, previous_site=None):
         try:
             kelvin, metadata = get_patch(storm)
             metadata['storm'] = dict(storm)
-            result = {**predict(kelvin), 'metadata': metadata, 'inferred_at': now_utc().isoformat(),
+            result = {**predict(kelvin, center_lat=metadata['center_lat']), 'metadata': metadata, 'inferred_at': now_utc().isoformat(),
                       'experimental': True, 'out_of_basin': not storm['in_training_basin']}
             if not result_valid(result):
                 raise ValueError('Model returned an invalid distribution.')

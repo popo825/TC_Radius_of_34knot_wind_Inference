@@ -124,7 +124,7 @@ def inference(patch_id: str):
     if not MODEL_PATH.is_file():
         raise HTTPException(503, '找不到模型，請設定 R34_MODEL_PATH。')
     try:
-        result = predict(patch)
+        result = predict(patch, center_lat=meta['center_lat'])
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     except Exception:

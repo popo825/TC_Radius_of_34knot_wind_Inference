@@ -28,7 +28,7 @@ jobs:
       PYTHONUTF8: "1"
       OMP_NUM_THREADS: "2"
       R34_MODEL_PATH: .models/model.pth
-      R34_MODEL_URL: ${{ vars.R34_MODEL_URL || format('https://github.com/{0}/releases/download/model-v2/SD_TCR_vgg_target_nae_dsm.pth', github.repository) }}
+      R34_MODEL_URL: ${{ vars.R34_MODEL_URL || format('https://github.com/{0}/releases/download/R34_model_v2/SD_TCR_vgg_target_nae_dsm.pth', github.repository) }}
       R34_MODEL_SHA256: ${{ vars.R34_MODEL_SHA256 || 'ee71b8962e767ef4e61b401cfca56102b5c25b47e935182e06bb1d0b9ad97eca' }}
 
     steps:

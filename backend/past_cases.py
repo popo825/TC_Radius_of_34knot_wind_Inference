@@ -207,7 +207,7 @@ def build_case(case, digest, workers):
     route_times = sorted({start, end, *(t for t in track if start <= t <= end)})
     route = [{'time': t.isoformat(), 'lat': position_at(track, t)[0], 'lon': position_at(track, t)[1]}
              for t in route_times]
-    _, bins, _ = load_model()
+    bins = load_model().bins
     write_json(manifest, {'schema_version': 1, 'id': slug, 'name': name, 'basin': basin,
                           'track_url': url, 'satellite': satellite, 'channel': 'ABI C14',
                           'model_sha256': digest, 'bins_nmi': bins.tolist(), 'track': route, 'frames': frames})
@@ -220,7 +220,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workers', type=int, choices=range(1, 17), default=12)
     args = parser.parse_args()
-    _, _, digest = load_model()
+    digest = load_model().digest
     for case in CASES:
         ready, total = build_case(case, digest, args.workers)
         print(f'{case[1]}: {ready}/{total} saved', flush=True)

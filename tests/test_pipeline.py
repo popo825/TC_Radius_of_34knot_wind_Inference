@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pyproj import Geod
 from backend import app as api
 from backend.imagery import DataUnavailable, satellite_for, target_grid
-from backend.model import MODEL_PATH, MEAN_K, STD_K, predict
+from backend.model import MODEL_PATH, LoadedModel, predict
 from backend.storms import parse_tidbits
 
 
@@ -56,17 +56,19 @@ class PipelineTests(unittest.TestCase):
                 self.input = image
                 return torch.zeros((1,59))
         model=Capture()
-        image=np.full((156,156), MEAN_K, dtype=np.float32)
+        mean_k, std_k = 266.5, 27.0
+        image=np.full((156,156), mean_k, dtype=np.float32)
         image[0,0]=np.nan
         bins=np.arange(10,305,5,dtype=np.float32)
-        with patch('backend.model.load_model', return_value=(model,bins,'test-only')):
+        with patch('backend.model.load_model', return_value=LoadedModel(model, bins, 'test-only', mean_k, std_k)):
             result=predict(image)
         self.assertEqual(tuple(model.input.shape),(1,1,156,156))
-        self.assertAlmostEqual(float(model.input[0,0,0,0]),(245-MEAN_K)/STD_K,places=5)
+        self.assertAlmostEqual(float(model.input[0,0,0,0]),(245-mean_k)/std_k,places=5)
         self.assertAlmostEqual(float(model.input[0,0,1,1]),0,places=5)
         self.assertEqual(len(result['probabilities']),59)
         self.assertAlmostEqual(sum(result['probabilities']),1,places=6)
         self.assertAlmostEqual(result['mean_nmi'],155,places=4)
+        self.assertEqual(result['normalization'], {'mean_k': mean_k, 'std_k': std_k})
         self.assertIsNone(result['ground_truth'])
 
     def test_api_validation_and_missing_storm(self):

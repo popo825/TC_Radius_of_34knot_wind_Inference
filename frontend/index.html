@@ -8,7 +8,7 @@
   <link rel="icon" href="assets/cyclone.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css"><link rel="stylesheet" href="styles.css?v=research-1">
   <link rel="stylesheet" href="past-storm.css?v=2">
-  <script defer src="vendor/leaflet.js"></script><script defer src="data-contract.js?v=single-clock-20261110"></script><script defer src="past-storm.js?v=2"></script><script defer src="coast-distance.js?v=1"></script><script defer src="app.js?v=hemisphere-input-1"></script>
+  <script defer src="vendor/leaflet.js"></script><script defer src="data-contract.js?v=single-clock-20261110"></script><script defer src="past-storm.js?v=2"></script><script defer src="coast-distance.js?v=1"></script><script defer src="app.js?v=vgg-target-1"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -141,7 +141,7 @@
           <section id="tutorial-sdtcr">
             <h2>What is the SD-TCR model?</h2>
             <p>SD-TCR stands for <strong>Self-Distilled Tropical Cyclone Radii Estimator</strong>. It uses a classification-based approach to estimate a probability distribution over wind-radius bins from satellite infrared imagery. During training, the two-model self-distillation design uses soft predictions to help the target model learn how probability is distributed across neighboring radius bins.</p>
-            <p>The current model achieved a mean absolute error (MAE) of <strong>25 n mi</strong> on the 2023–2025 test set.</p>
+            <p>The VGG target model achieved a mean absolute error (MAE) of <strong>24.31 n mi</strong> across 934 samples from 28 storms in the 2023–2025 test set, evaluated against IBTrACS mean R34.</p>
           </section>
           <section id="tutorial-invalid">
             <h2>Reminder of invalid cases</h2>

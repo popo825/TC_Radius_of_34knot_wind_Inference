@@ -104,7 +104,7 @@ def build_site(output, previous_site=None):
     frontend = (ROOT / 'frontend').resolve()
     if output == ROOT or output == frontend or output in frontend.parents or frontend in output.parents:
         raise ValueError('Build output must be separate from the frontend source directory.')
-    _, _, digest = load_model()  # A broken checkpoint must fail the entire run.
+    digest = load_model().digest  # A broken checkpoint must fail the entire run.
     feed = fetch_storms()  # A total feed outage preserves the published site.
     if len(feed['storms']) > 100 or any(not SID.fullmatch(s.get('id', '')) for s in feed['storms']):
         raise ValueError('Invalid or unexpectedly large active-storm feed.')

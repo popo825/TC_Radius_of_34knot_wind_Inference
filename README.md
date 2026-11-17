@@ -5,7 +5,7 @@ https://popo825.github.io/TC_Radius_of_34knot_wind_Inference/
 ## 檔案與 API
 
 ```text
-backend/model.py       原始架構、權重載入、固定正規化與推論
+backend/model.py       模型架構、從權重讀取正規化參數、推論
 backend/storms.py      全球清單解析、NHC 有限範圍備援
 backend/imagery.py     原始衛星資料、對中裁切、校準與重採樣
 backend/centers.py     影像時刻中心內插／外推（WGS84）

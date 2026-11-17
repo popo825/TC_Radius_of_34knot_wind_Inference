@@ -1,4 +1,5 @@
-"""Inference architecture copied from Sep_LDL_test.ipynb; no training changes."""
+"""Load the SD-TCR checkpoint and estimate a radius distribution from Kelvin crops."""
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 import hashlib
@@ -8,7 +9,7 @@ import torch
 from torch import nn
 
 ROOT = Path(__file__).resolve().parents[1]
-MODEL_PATH = Path(os.getenv('R34_MODEL_PATH', str(ROOT / 'TCR34_reference_DNN_test1_25MAE.pth')))
+MODEL_PATH = Path(os.getenv('R34_MODEL_PATH', str(ROOT / 'SD_TCR_vgg_target_nae_dsm.pth')))
 MEAN_K, STD_K = 236.54854, 26.703743
 
 
@@ -32,6 +33,45 @@ class HurricaneAlexNet_ReferenceDNN(nn.Module):
         return self.classifier(self.features(x))
 
 
+class HurricaneVGGCompact(nn.Module):
+    """VGG target from Sep_SD_TCR_VGG_NAE_DSM_Colab.ipynb."""
+
+    def __init__(self, num_classes=59):
+        super().__init__()
+        layers = []
+        in_channels = 1
+        for channels in (16, 32, 64, 96):
+            for _ in range(2):
+                layers.extend([
+                    nn.Conv2d(in_channels, channels, 3, padding=1, bias=False),
+                    nn.BatchNorm2d(channels),
+                    nn.ReLU(inplace=True),
+                ])
+                in_channels = channels
+            layers.append(nn.MaxPool2d(2))
+        self.features = nn.Sequential(*layers)
+        self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d((3, 3)),
+            nn.Flatten(),
+            nn.Linear(96 * 3 * 3, 64),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.25),
+            nn.Linear(64, num_classes),
+        )
+
+    def forward(self, image):
+        return self.classifier(self.features(image))
+
+
+@dataclass(frozen=True)
+class LoadedModel:
+    network: nn.Module
+    bins: np.ndarray
+    digest: str
+    mean_k: float
+    std_k: float
+
+
 @lru_cache(maxsize=1)
 def load_model():
     # The notebook checkpoint includes NumPy arrays. Allow only the required types;
@@ -43,11 +83,24 @@ def load_model():
     bins = np.asarray(checkpoint['bin_centers'], dtype=np.float32)
     if bins.shape != (59,) or not np.array_equal(bins, np.arange(10, 305, 5)):
         raise ValueError('Checkpoint bin centers do not match the expected 59 bins.')
-    model = HurricaneAlexNet_ReferenceDNN()
-    model.load_state_dict(checkpoint['model_state_dict'], strict=True)
-    model.eval()
-    digest = hashlib.sha256(MODEL_PATH.read_bytes()).hexdigest()
-    return model, bins, digest
+    architecture = checkpoint.get('architecture', 'alexnet_reference')
+    if architecture == 'vgg_compact':
+        network = HurricaneVGGCompact()
+        mean_k, std_k = float(checkpoint['mean_k']), float(checkpoint['std_k'])
+    elif architecture == 'alexnet_reference':
+        network = HurricaneAlexNet_ReferenceDNN()
+        mean_k = float(checkpoint.get('mean_k', MEAN_K))
+        std_k = float(checkpoint.get('std_k', STD_K))
+    else:
+        raise ValueError(f'Unsupported checkpoint architecture: {architecture!r}.')
+    if not np.isfinite([mean_k, std_k]).all() or std_k <= 0:
+        raise ValueError('Checkpoint normalization requires a finite mean and positive standard deviation.')
+
+    network.load_state_dict(checkpoint['model_state_dict'], strict=True)
+    network.eval()
+    with MODEL_PATH.open('rb') as weights:
+        digest = hashlib.file_digest(weights, 'sha256').hexdigest()
+    return LoadedModel(network, bins, digest, mean_k, std_k)
 
 
 def predict(kelvin, *, center_lat=0.0):
@@ -64,11 +117,13 @@ def predict(kelvin, *, center_lat=0.0):
     flipped = center_lat < 0
     if flipped:
         image = image[::-1, :]
-    normalized = (image - MEAN_K) / STD_K
-    model, bins, digest = load_model()
+    model = load_model()
+    normalized = (image - model.mean_k) / model.std_k
     with torch.inference_mode():
-        probability = torch.softmax(model(torch.from_numpy(normalized.copy())[None, None]), -1)[0].numpy()
-    return {'bins_nmi': bins.tolist(), 'probabilities': probability.tolist(),
-            'mean_nmi': float(np.dot(probability, bins)), 'model_sha256': digest,
+        logits = model.network(torch.from_numpy(normalized.copy())[None, None])
+        probability = torch.softmax(logits, dim=-1)[0].numpy()
+    return {'bins_nmi': model.bins.tolist(), 'probabilities': probability.tolist(),
+            'mean_nmi': float(np.dot(probability, model.bins)), 'model_sha256': model.digest,
+            'normalization': {'mean_k': model.mean_k, 'std_k': model.std_k},
             'input_vertical_flip': flipped,
             'missing_fraction': float(1 - finite.mean()), 'ground_truth': None}

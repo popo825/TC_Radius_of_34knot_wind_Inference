@@ -42,7 +42,7 @@ class BatchTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.output=Path(self.temp.name)/'site'
         self.stack=ExitStack();self.addCleanup(self.stack.close)
-        self.stack.enter_context(patch('backend.batch.load_model',return_value=(None,None,DIGEST)))
+        self.stack.enter_context(patch('backend.batch.load_model',return_value=Mock(digest=DIGEST)))
         self.stack.enter_context(patch('backend.batch.now_utc',return_value=NOW))
         self.stack.enter_context(patch('backend.batch.predict',return_value=result()))
         self.stack.enter_context(patch('backend.batch.get_patch',side_effect=lambda s:(np.full((156,156),236.5),metadata(s))))

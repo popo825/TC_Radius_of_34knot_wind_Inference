@@ -56,3 +56,18 @@
   .paper-header h1 span { display: inline; }
   .paper-contents .paper-subnav { padding-left: 0; border-left: 0; }
 }
+
+/* Research results and figures */
+.paper-contents { max-height: calc(100vh - 60px); overflow-y: auto; padding-right: 12px; }
+.paper-body :is(h4, figure)[id] { scroll-margin-top: 24px; }
+.paper-body .author-note { padding: 20px 24px; border-left: 3px solid var(--blue); background: #edf3f7; }
+.paper-body .author-note h2 { font-size: 20px; margin-bottom: 10px; }
+.paper-body .author-note p { margin-bottom: 0; }
+.research-figure { margin: 26px 0 30px; }
+.research-figure img { display: block; width: 100%; height: auto; background: white; }
+.research-figure figcaption { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.paper-table td { font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .paper-contents { max-height: none; overflow: visible; padding-right: 0; }
+  .paper-body .author-note { padding: 16px; }
+}

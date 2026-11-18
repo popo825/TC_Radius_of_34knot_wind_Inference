@@ -219,38 +219,48 @@ function renderRecord(){
 }
 
 function renderChart(result, target = $('chart')) {
-  const W=340,H=210,pad={l:38,r:12,t:17,b:34},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
-  const max=Math.max(...result.probabilities)*1.18;
-  const x=v=>pad.l+(v-10)/290*cw,y=v=>pad.t+ch-v/max*ch;
-  let contents='';
-  for(let i=0;i<=4;i++){
-    const val=max*i/4,yp=y(val);
-    contents+=`<line x1="${pad.l}" y1="${yp}" x2="${W-pad.r}" y2="${yp}" stroke="#dfe5e9" stroke-dasharray="3 4"/><text x="${pad.l-7}" y="${yp+3}" text-anchor="end" fill="#607585" font-size="10">${val.toFixed(2)}</text>`;
+  const width = 340, height = 238;
+  const padding = { left: 38, right: 12, top: 45, bottom: 34 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const peak = Math.max(...result.probabilities);
+  // The first maximum assigns tied modes to the lower radius bin.
+  const modeIndex = result.probabilities.indexOf(peak);
+  const mode = result.bins_nmi[modeIndex];
+  const maxProbability = peak * 1.18;
+  const x = radius => padding.left + (radius - 10) / 290 * plotWidth;
+  const y = probability => padding.top + plotHeight - probability / maxProbability * plotHeight;
+  const meanColor = '#234e6d', modeColor = '#84919b';
+  let contents = `
+    <line x1="38" y1="12" x2="52" y2="12" stroke="${meanColor}" stroke-width="2" stroke-dasharray="3 4"/>
+    <text x="57" y="15" fill="${meanColor}" font-size="12" font-weight="650">Mean ${result.mean_nmi.toFixed(1)} n mi</text>
+    <line x1="186" y1="12" x2="200" y2="12" stroke="${modeColor}" stroke-width=".8" opacity=".55" stroke-dasharray="2 4"/>
+    <text x="205" y="15" fill="${modeColor}" font-size="9">Mode bin ${mode} n mi</text>
+    <text x="0" y="35" fill="#607585" font-size="10">Probability</text>`;
+  for (let i = 0; i <= 4; i++) {
+    const value = maxProbability * i / 4, yp = y(value);
+    contents += `<line x1="${padding.left}" y1="${yp}" x2="${width-padding.right}" y2="${yp}" stroke="#dfe5e9" stroke-dasharray="3 4"/><text x="${padding.left-7}" y="${yp+3}" text-anchor="end" fill="#607585" font-size="10">${value.toFixed(2)}</text>`;
   }
-  for(const val of [10,50,100,150,200,250,300]) contents+=`<text x="${x(val)}" y="${H-19}" text-anchor="middle" fill="#607585" font-size="10">${val}</text>`;
-  const points=result.bins_nmi.map((b,i)=>`${x(b)},${y(result.probabilities[i])}`).join(' ');
-  contents+=`<polygon points="${x(10)},${y(0)} ${points} ${x(300)},${y(0)}" fill="#bd526b10"/><polyline points="${points}" stroke="#b94762" stroke-width="2" fill="none" stroke-linejoin="round"/>`;
-  const mx=x(result.mean_nmi);
-  contents+=`<line x1="${mx}" y1="${pad.t-5}" x2="${mx}" y2="${y(0)}" stroke="#234e6d" stroke-dasharray="3 4"/><text x="${Math.min(W-32,Math.max(65,mx+5))}" y="10" fill="#234e6d" font-size="10">mean ${result.mean_nmi.toFixed(1)}</text>`;
-  result.bins_nmi.forEach((b,i)=>contents+=`<circle cx="${x(b)}" cy="${y(result.probabilities[i])}" r="2" fill="#b94762"><title>${b} n mi：${(result.probabilities[i]*100).toFixed(3)}%</title></circle>`);
-  contents+=`<text x="${W/2}" y="${H-2}" text-anchor="middle" fill="#607585" font-size="10">Wind radius (n mi)</text><text x="0" y="8" fill="#607585" font-size="10">Probability</text>`;
-  target.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="R34 prediction distribution, mean ${result.mean_nmi.toFixed(1)} nautical miles"><title>R34 probability distribution</title>${contents}</svg>`;
+  for (const value of [10,50,100,150,200,250,300]) {
+    contents += `<text x="${x(value)}" y="${height-19}" text-anchor="middle" fill="#607585" font-size="10">${value}</text>`;
+  }
+  const points = result.bins_nmi.map((bin, i) => `${x(bin)},${y(result.probabilities[i])}`).join(' ');
+  contents += `<polygon points="${x(10)},${y(0)} ${points} ${x(300)},${y(0)}" fill="#bd526b10"/><polyline points="${points}" stroke="#b94762" stroke-width="2" fill="none" stroke-linejoin="round"/>`;
+  contents += `<line x1="${x(result.mean_nmi)}" y1="${padding.top-5}" x2="${x(result.mean_nmi)}" y2="${y(0)}" stroke="${meanColor}" stroke-width="2" stroke-dasharray="3 4"/>`;
+  contents += `<line x1="${x(mode)}" y1="${padding.top-5}" x2="${x(mode)}" y2="${y(0)}" stroke="${modeColor}" stroke-width=".8" opacity=".55" stroke-dasharray="2 4"/>`;
+  result.bins_nmi.forEach((bin, i) => {
+    contents += `<circle cx="${x(bin)}" cy="${y(result.probabilities[i])}" r="2" fill="#b94762"><title>${bin} n mi: ${(result.probabilities[i]*100).toFixed(3)}%</title></circle>`;
+  });
+  contents += `<circle cx="${x(mode)}" cy="${y(peak)}" r="2.5" fill="white" stroke="${modeColor}" stroke-width=".8"><title>Mode bin ${mode} n mi</title></circle>`;
+  contents += `<text x="${width/2}" y="${height-2}" text-anchor="middle" fill="#607585" font-size="10">Wind radius (n mi)</text>`;
+  target.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="R34 prediction distribution, mean ${result.mean_nmi.toFixed(1)} nautical miles, mode bin ${mode} nautical miles"><title>R34 probability distribution</title>${contents}</svg>`;
 }
-function downloadResult() {
-  const r=state.result;if(!r)return;
-  const m=r.metadata;
-  const e=m.center_estimation||{};
-  const header='bin_nmi,probability,mean_nmi,storm_id,image_time_utc,position_time_utc,satellite,channel,center_lat,center_lon,model_sha256,center_valid_at,center_method,position_source,motion_kmh,motion_bearing_deg';
-  const csv=[header,...r.bins_nmi.map((b,i)=>[b,r.probabilities[i],r.mean_nmi,m.storm.id,m.observed_at,m.position_at,m.satellite,m.channel,m.center_lat,m.center_lon,r.model_sha256,e.valid_at||'',e.method||'reported_unadjusted',e.reference_source||'',e.speed_kmh??'',e.bearing_deg??''].join(','))].join('\r\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=`R34-${m.storm.id}-${m.observed_at.replace(/[:+]/g,'-')}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
+
 
 $('refresh').addEventListener('click',()=>refreshStorms(true));
 $('basin-filter').addEventListener('change',renderStorms);
 $('reset-map').addEventListener('click',resetMap);
 $('infer').addEventListener('click',runInferenceAnimation);
-$('download-result').addEventListener('click',downloadResult);
 window.addEventListener?.('hashchange',route);
 updateClock();setInterval(updateClock,1000);
 initMap();route();refreshStorms();setInterval(()=>refreshStorms(),300000);
